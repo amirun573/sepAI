@@ -1,5 +1,5 @@
 # sepAI
-Open Source to pick your favourite AI Model
+Open Source to pick your favourite AI Model.
 
 
 This software is free to use, modify, and distribute for non-commercial purposes only.
