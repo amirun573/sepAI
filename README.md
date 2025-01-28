@@ -5,7 +5,7 @@ Open Source to pick your favourite AI Model.
 1. `cd backend`
 2. `virtualenv venv`
 3. `source venv/bin/activate`
-4.  `python manage.py runserver`
+4.  `uvicorn main:app --reload`
 
 
 This software is free to use, modify, and distribute for non-commercial purposes only.
