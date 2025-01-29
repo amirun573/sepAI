@@ -2,118 +2,147 @@
 
 import { APICode } from '@/_Common/enum/api-code.enum';
 import API from '@/_Common/function/api';
-import React, { useEffect } from 'react';
-
+import React, { useEffect, useState } from 'react';
+import { DeviceCondition, DeviceSpecification } from '@/_Common/interface/device.interface';
+import Navbar from '@/components/Navbar';
+import Header from '@/components/Header';
+import Prompt from '@/components/Prompt';
 const Dashboard: React.FC = () => {
 
-    const specDevice = async () => {
+
+
+    const [deviceCondition, setDeviceCondition] = useState<DeviceCondition | null>(null);
+    const [deviceSpecification, setDeviceSpecification] = useState<DeviceSpecification | null>(null);
+    const [isLoaded, setIsLoaded] = useState(false); // Add loading flag
+
+
+
+    const fetchDeviceData = async () => {
         try {
 
             const requestSpec = await API({
                 url: 'devices/spec',
                 API_Code: APICode.spec_device,
             });
-        } catch (error) {
-            console.error(error);
 
+            if (requestSpec.status !== 200) {
+                throw Error(requestSpec?.message || 'No Device Response');
+            }
+
+            const { device_condition,
+                device_specifications } = requestSpec.data;
+
+            if (!device_condition || !device_specifications) {
+                throw Error('No Device Condition / Specification Return');
+            }
+
+            setDeviceCondition((prev) => ({
+                ...prev,
+                ...device_condition, // Merge with new values
+            }) as DeviceCondition);
+
+            setDeviceSpecification((prev) => ({
+                ...prev,
+                ...device_specifications, // Merge with new values
+            }) as DeviceSpecification);
+
+            setIsLoaded(true); // Set loaded state after data is fetched
+
+        } catch (error: any) {
+            console.error(error);
+            alert(error.message)
         }
     }
 
     useEffect(() => {
-        specDevice();
-    }, []);
+        // Fetch data on component mount
+        fetchDeviceData();
+
+        // Set up the interval to fetch data every 10 seconds
+        const interval = setInterval(fetchDeviceData, 5000);
+
+        // Clear the interval on component unmount
+        return () => clearInterval(interval);
+    }, []); // Empty dependency array to run once when component mounts
+
+    // Prevent rendering until data is loaded
+    if (!isLoaded) {
+        return null; // Or you can show a loading spinner if you prefer
+    }
     return (
         <div className="min-h-screen flex bg-gray-100">
             {/* Sidebar */}
-            <aside className="w-64 bg-white shadow-md">
-                <div className="p-6">
-                    <h2 className="text-2xl font-bold text-gray-800">Dashboard</h2>
-                    <nav className="mt-8">
-                        <ul className="space-y-4">
-                            <li>
-                                <a href="#" className="flex items-center text-gray-700 hover:text-gray-900">
-                                    <span className="mr-2">🏠</span>
-                                    Home
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="flex items-center text-gray-700 hover:text-gray-900">
-                                    <span className="mr-2">📊</span>
-                                    Analytics
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="flex items-center text-gray-700 hover:text-gray-900">
-                                    <span className="mr-2">📁</span>
-                                    Projects
-                                </a>
-                            </li>
-                            <li>
-                                <a href="#" className="flex items-center text-gray-700 hover:text-gray-900">
-                                    <span className="mr-2">⚙️</span>
-                                    Settings
-                                </a>
-                            </li>
-                        </ul>
-                    </nav>
-                </div>
-            </aside>
+
+            <Navbar />
 
             {/* Main Content */}
             <main className="flex-1 p-8">
                 {/* Header */}
-                <header className="flex justify-between items-center mb-8">
-                    <h1 className="text-2xl font-bold text-gray-800">Welcome Back, User!</h1>
-                    <div className="relative">
-                        <button className="flex items-center text-gray-800 hover:text-gray-600">
-                            <img
-                                src="https://via.placeholder.com/40"
-                                alt="User Avatar"
-                                className="w-10 h-10 rounded-full"
-                            />
-                            <span className="ml-2">▼</span>
-                        </button>
-                        {/* Dropdown Menu */}
-                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 hidden">
-                            <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                                Profile
-                            </a>
-                            <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                                Settings
-                            </a>
-                            <a href="#" className="block px-4 py-2 text-gray-700 hover:bg-gray-100">
-                                Logout
-                            </a>
-                        </div>
-                    </div>
-                </header>
+               <Header/>
 
                 {/* Cards Section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+
+                    <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h3 className="text-xl font-bold text-gray-800">Device</h3>
+                        <p className="mt-2 text-gray-600">
+                            {deviceCondition && deviceSpecification ? (
+                                <div>
+                                    <p>Powered: {deviceSpecification.name}</p>
+                                    <p>Usage: {deviceCondition.status}</p>
+                                </div>
+                            ) : (
+                                <p>Device condition is unavailable.</p>
+                            )}
+                        </p>
+                    </div>
                     {/* Card 1 */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold text-gray-800">Total Revenue</h3>
-                        <p className="mt-2 text-gray-600">$12,345</p>
+                        <h3 className="text-xl font-bold text-gray-800">CPU</h3>
+                        <p className="mt-2 text-gray-600">
+                            {deviceCondition && deviceSpecification ? (
+                                <div>
+                                    <p>Powered: {deviceSpecification.cpu}</p>
+                                    <p>Usage: {deviceCondition.cpu_usage}</p>
+                                </div>
+                            ) : (
+                                <p>Device condition is unavailable.</p>
+                            )}
+                        </p>
                     </div>
                     {/* Card 2 */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold text-gray-800">Users</h3>
-                        <p className="mt-2 text-gray-600">1,234</p>
+                        <h3 className="text-xl font-bold text-gray-800">RAM</h3>
+                        <p className="mt-2 text-gray-600">
+                            {deviceCondition && deviceSpecification ? (
+                                <div>
+                                    <p>Powered: {deviceSpecification.ram}</p>
+                                    <p>Usage: {deviceCondition.memory_usage}</p>
+                                </div>
+                            ) : (
+                                <p>Device condition is unavailable.</p>
+                            )}
+                        </p>
                     </div>
                     {/* Card 3 */}
                     <div className="bg-white p-6 rounded-lg shadow-md">
-                        <h3 className="text-xl font-bold text-gray-800">Projects</h3>
-                        <p className="mt-2 text-gray-600">45</p>
+                        <h3 className="text-xl font-bold text-gray-800">Temperature</h3>
+                        <p className="mt-2 text-gray-600">
+                            {deviceCondition && deviceSpecification ? (
+
+                                <h3>Usage: {isNaN(deviceCondition.temperature) ? 'N/A' : `${deviceCondition.temperature}°C`}</h3>
+
+                            ) : (
+                                <p>Device condition is unavailable.</p>
+                            )}
+                        </p>
                     </div>
+
+
                 </div>
 
                 {/* Charts Section */}
-                <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-                    <h3 className="text-xl font-bold text-gray-800 mb-4">Monthly Performance</h3>
-                    <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <span className="text-gray-500">Chart Placeholder</span>
-                    </div>
-                </div>
+                <Prompt/>
 
                 {/* Recent Activity Section */}
                 <div className="bg-white p-6 rounded-lg shadow-md">
