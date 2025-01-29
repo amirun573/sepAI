@@ -1,29 +1,24 @@
-# frontend/Dockerfile
-
-# Use Node.js as the base image
-FROM node:18 as build
+# Step 1: Set up the base image with Node.js
+FROM node:18-alpine AS base
 
 # Set the working directory
 WORKDIR /app
 
-# Copy package.json and install dependencies
+# Step 2: Install dependencies
+# Copy the package.json and package-lock.json first to leverage caching
 COPY package.json package-lock.json ./
+
+# Install dependencies
 RUN npm install
 
-# Copy the rest of the application code
+# Step 3: Copy the application files
 COPY . .
 
-# Build the app
+# Step 4: Build the Next.js app
 RUN npm run build
 
-# Use a lightweight web server to serve the app
-FROM nginx:alpine
+# Step 5: Expose the necessary port
+EXPOSE 3000
 
-# Copy the built app to the Nginx HTML directory
-COPY --from=build /app/dist /usr/share/nginx/html
-
-# Expose port 80
-EXPOSE 80
-
-# Start Nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Step 6: Start the Next.js app
+CMD ["npm", "run", "start"]
