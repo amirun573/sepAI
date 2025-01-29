@@ -1,7 +1,13 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",  // Any request to /api/ will be proxied
+        destination: "http://127.0.0.1:8000/api/v1/:path*",  // Django backend
+      },
+    ];
+  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
