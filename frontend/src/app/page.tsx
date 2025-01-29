@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -9,9 +11,13 @@ export default function Home() {
           This is a simple Next.js app with TypeScript and Tailwind CSS.
         </p>
         <div className="flex justify-center">
-          <button className="bg-indigo-600 text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            Get Started
-          </button>
+          <Link href="/dashboard">
+
+            <button className="bg-indigo-600 text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              Get Started
+            </button>
+          </Link>
+
         </div>
       </div>
     </div>
