@@ -89,7 +89,9 @@ const Dashboard: React.FC = () => {
                             {deviceCondition && deviceSpecification ? (
                                 <div>
                                     <p>Powered: {deviceSpecification.name}</p>
-                                    <p>Usage: {deviceCondition.status}</p>
+                                    <p>Usage: {deviceCondition.status.toUpperCase()}</p>
+                                    <p>Operation System (OS): {deviceSpecification.os}</p>
+
                                 </div>
                             ) : (
                                 <p>Device condition is unavailable.</p>
@@ -137,6 +139,8 @@ const Dashboard: React.FC = () => {
                             )}
                         </p>
                     </div>
+
+                    
 
 
                 </div>
