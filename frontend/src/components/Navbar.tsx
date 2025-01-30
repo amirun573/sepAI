@@ -22,6 +22,11 @@ const Navbar: React.FC = () => {
             link: '#'
         },
         {
+            label: 'History',
+            icon: '🪄',
+            link: '#'
+        },
+        {
             label: 'Settings',
             icon: '⚙️',
             link: '#'
