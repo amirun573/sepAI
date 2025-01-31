@@ -1,5 +1,5 @@
-from typing import List
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, Field
 
 class DeviceCreate(BaseModel):
     name: str
@@ -16,6 +16,9 @@ class DeviceSpecifications(BaseModel):
     ram: str
     storage: str
     os: str
+    cpu_logical_threads: int
+    cpu_physcial_cores: int
+
 
 # Schema for device condition
 class DeviceCondition(BaseModel):
@@ -42,12 +45,12 @@ class DeviceSpecResponse(BaseModel):
     gpu_details: DeviceGPUDetails
 
 class GPUInfo(BaseModel):
-    GPU: str
-    memory_total_MB: int  # Total memory in MB
-    memory_used_MB: int   # Used memory in MB
-    memory_free_MB: int   # Free memory in MB
-    load_percent: float   # Load percentage
-    temperature_C: float  # Temperature in Celsius
+    name: str = Field(..., description="GPU name")
+    memory_total_MB: int = Field(..., description="Total GPU memory in MB")
+    memory_used_MB: int = Field(..., description="Used GPU memory in MB")
+    memory_free_MB: int = Field(..., description="Free GPU memory in MB")
+    load_percent: float = Field(..., description="GPU usage percentage")
+    temperature_C: float = Field(..., description="GPU temperature in Celsius")
 
 class GPUResponse(BaseModel):
-    gpu_details: List[GPUInfo]
+    gpu_details: List[GPUInfo] = Field(default_factory=list, description="List of GPU details")

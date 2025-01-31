@@ -1,6 +1,6 @@
 from app.models.device.device import get_device_condition, get_device_spec, get_gpu_info
 from fastapi import APIRouter, Depends, HTTPException
-from app.models.schemas import DeviceCreate, DeviceResponse,DeviceSpecResponse
+from app.models.schemas import DeviceCreate, DeviceGPUDetails, DeviceResponse,DeviceSpecResponse
 from typing import List, Dict
 
 
@@ -19,12 +19,13 @@ class DeviceController:
     async def spec_lists():
         device_spec = get_device_spec()
         device_condition = get_device_condition()
-        get_gpu = get_gpu_info()
-        # Combine both specs and condition into a single dictionary
+        gpu_info_response = get_gpu_info()  # Ensure this returns a GPUResponse object
+
+      
         result = {
             "device_specifications": device_spec,
             "device_condition": device_condition,
-            "gpu_details": get_gpu
+            "gpu_details": gpu_info_response
         }
     
         # Convert the result to JSON and print

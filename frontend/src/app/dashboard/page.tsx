@@ -3,7 +3,7 @@
 import { APICode } from '@/_Common/enum/api-code.enum';
 import API from '@/_Common/function/api';
 import React, { useEffect, useState } from 'react';
-import { DeviceCondition, DeviceSpecification } from '@/_Common/interface/device.interface';
+import { DeviceCondition, DeviceSpecification, GPUDetails } from '@/_Common/interface/device.interface';
 import Navbar from '@/components/Navbar';
 import Header from '@/components/Header';
 import Prompt from '@/components/Prompt';
@@ -13,6 +13,7 @@ const Dashboard: React.FC = () => {
 
     const [deviceCondition, setDeviceCondition] = useState<DeviceCondition | null>(null);
     const [deviceSpecification, setDeviceSpecification] = useState<DeviceSpecification | null>(null);
+    const [gpuDetails, setGPUDetails] = useState<GPUDetails | null>(null);
     const [isLoaded, setIsLoaded] = useState(false); // Add loading flag
 
 
@@ -30,7 +31,7 @@ const Dashboard: React.FC = () => {
             }
 
             const { device_condition,
-                device_specifications } = requestSpec.data;
+                device_specifications, gpu_details } = requestSpec.data;
 
             if (!device_condition || !device_specifications) {
                 throw Error('No Device Condition / Specification Return');
@@ -45,6 +46,11 @@ const Dashboard: React.FC = () => {
                 ...prev,
                 ...device_specifications, // Merge with new values
             }) as DeviceSpecification);
+
+            setGPUDetails((prev) => ({
+                ...prev,
+                ...gpu_details, // Merge with new values
+            }) as GPUDetails);
 
             setIsLoaded(true); // Set loaded state after data is fetched
 
@@ -78,7 +84,7 @@ const Dashboard: React.FC = () => {
             {/* Main Content */}
             <main className="flex-1 p-8">
                 {/* Header */}
-               <Header/>
+                <Header />
 
                 {/* Cards Section */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -105,6 +111,9 @@ const Dashboard: React.FC = () => {
                             {deviceCondition && deviceSpecification ? (
                                 <div>
                                     <p>Powered: {deviceSpecification.cpu}</p>
+                                    <p>Cores: {deviceSpecification.cpu_physcial_cores}</p>
+                                    <p>Threads: {deviceSpecification.cpu_logical_threads}</p>
+
                                     <p>Usage: {deviceCondition.cpu_usage}</p>
                                 </div>
                             ) : (
@@ -140,16 +149,36 @@ const Dashboard: React.FC = () => {
                         </p>
                     </div>
 
-                    
+                    <div className="bg-white p-6 rounded-lg shadow-md">
+                        <h3 className="text-xl font-bold text-gray-800">GPU</h3>
+                        <p className="mt-2 text-gray-600">
+                            {gpuDetails ? (
+                                <div>
+                                    <h3>Name: {!(gpuDetails.name) ? 'N/A' : `${gpuDetails.name}`}</h3>
+                                    <h4>Total Memory: {!(gpuDetails.memory_total_MB) ? 'N/A' : `${gpuDetails.memory_total_MB}`}</h4>
+                                    <h4>Memory Usage: {!(gpuDetails.memory_free_MB) ? 'N/A' : `${gpuDetails.memory_free_MB}`}</h4>
+                                    <h4>Load Percentage: {!(gpuDetails.load_percent) ? 'N/A' : `${gpuDetails.load_percent}%`}</h4>
+                                    <h4>Temperature: {!(gpuDetails.temperature) ? 'N/A' : `${gpuDetails.temperature}°C`}</h4>
+
+                                </div>
+
+
+                            ) : (
+                                <p>No GPU Detected.</p>
+                            )}
+                        </p>
+                    </div>
+
+
 
 
                 </div>
 
                 {/* Charts Section */}
-                <Prompt/>
+                <Prompt />
 
                 {/* Recent Activity Section */}
-                <div className="bg-white p-6 rounded-lg shadow-md">
+                {/* <div className="bg-white p-6 rounded-lg shadow-md">
                     <h3 className="text-xl font-bold text-gray-800 mb-4">Recent Activity</h3>
                     <ul className="space-y-4">
                         <li className="flex items-center">
@@ -165,7 +194,7 @@ const Dashboard: React.FC = () => {
                             <p className="text-gray-700">New user registered</p>
                         </li>
                     </ul>
-                </div>
+                </div> */}
             </main>
         </div>
     );
