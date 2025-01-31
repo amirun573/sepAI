@@ -85,7 +85,7 @@ const Navbar: React.FC = () => {
                     </button>
                 )}
 
-                <h2 className="text-2xl font-bold text-gray-800">SepAI</h2>
+                <h2 className="text-2xl font-bold text-gray-800">SepAI Studio</h2>
                 <nav className="mt-8">
                     <ul className="space-y-4">
 

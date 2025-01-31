@@ -16,4 +16,15 @@ export interface DeviceSpecification {
   os: string;
   ram: string;
   storage: string;
+  cpu_logical_threads: number;
+  cpu_physcial_cores: number;
+}
+
+export interface GPUDetails {
+  load_percent: number;
+  memory_free_MB: string;
+  memory_total_MB: string;
+  memory_used_MB: string;
+  name: string;
+  temperature: number;
 }
