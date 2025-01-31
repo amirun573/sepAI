@@ -14,12 +14,12 @@ const Navbar: React.FC = () => {
         {
             label: 'Home',
             icon: '🏠',
-            link: '#'
+            link: '/dashboard'
         },
         {
             label: 'Marketplace',
             icon: '🏭',
-            link: '#'
+            link: '/marketplace'
         },
         {
             label: 'History',
