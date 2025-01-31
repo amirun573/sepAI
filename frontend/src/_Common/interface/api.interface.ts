@@ -10,4 +10,5 @@ export interface APIInterface {
     status: number;
     message?: string;
     data?: any;
+    success: boolean;
   }
