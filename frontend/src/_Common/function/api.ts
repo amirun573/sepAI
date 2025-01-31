@@ -5,6 +5,7 @@ import { APIInterface, APIResponse } from "../interface/api.interface";
 
 const API = async (object: APIInterface): Promise<APIResponse> => {
   let response: APIResponse = {
+    success: false,
     status: 500,
     message: "Internal Server Error",
     data: {},
@@ -24,6 +25,23 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         }
 
         response = {
+          success: true,
+          status: spec_device.status,
+          data: spec_device.data,
+        };
+
+        break;
+      }
+
+      case APICode.download_model: {
+        const spec_device = await axios.get(`${baseURL}${url}`);
+
+        if (!spec_device) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
           status: spec_device.status,
           data: spec_device.data,
         };

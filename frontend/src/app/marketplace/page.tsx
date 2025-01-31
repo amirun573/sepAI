@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import Navbar from "@/components/Navbar";
 import Header from "@/components/Header";
 import useSWR from "swr";
+import API from "@/_Common/function/api";
+import { APICode } from "@/_Common/enum/api-code.enum";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 
@@ -14,6 +16,22 @@ const MarketPlace: React.FC = () => {
         expandedModel ? `https://huggingface.co/api/models/${expandedModel}` : null,
         fetcher
     );
+
+    const handleDownloadModel = async () => {
+        // Trigger model download on backend
+
+        const response = await API({
+            url: 'model/download',
+            API_Code: APICode.download_model,
+        });
+        if (response.success) {
+            // Notify user and trigger backend restart
+            alert("Model downloaded, backend restarting...");
+            // // Call the restart endpoint
+            // await fetch("/api/restart_backend");
+        }
+    };
+
 
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
