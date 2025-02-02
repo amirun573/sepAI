@@ -16,22 +16,26 @@ const MarketPlace: React.FC = () => {
         expandedModel ? `https://huggingface.co/api/models/${expandedModel}` : null,
         fetcher
     );
+    const [visibleCount, setVisibleCount] = useState(10); // Show 10 models initially
 
-    const handleDownloadModel = async () => {
-        // Trigger model download on backend
-
-        const response = await API({
-            url: 'model/download',
-            API_Code: APICode.download_model,
-        });
-        if (response.success) {
-            // Notify user and trigger backend restart
-            alert("Model downloaded, backend restarting...");
-            // // Call the restart endpoint
-            // await fetch("/api/restart_backend");
-        }
+    const handleLoadMore = () => {
+        setVisibleCount((prev) => prev + 10); // Load 10 more models
     };
 
+    const handleDownloadModel = async (model_id: string) => {
+        try {
+
+            if (!model_id)
+                throw Error("NO Model ID Found");
+
+            console.log("model_id==>", model_id);
+
+            return;
+        } catch (error: any) {
+            alert(error?.message || "Internal Server Error");
+            return;
+        }
+    }
 
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
@@ -48,9 +52,9 @@ const MarketPlace: React.FC = () => {
 
                 {/* Model List */}
                 <div className="mt-5">
-                    <h2 className="text-xl font-semibold mb-4">Hugging Face Models</h2>
+                    <h2 className="text-xl font-semibold mb-4 text-black">Hugging Face Models</h2>
                     <ul className="bg-white p-4 rounded-md shadow-md">
-                        {data?.slice(0, 10).map((model: any, index: number) => (
+                        {data?.slice(0, visibleCount).map((model: any, index: number) => (
                             <li key={index} className="border-b last:border-none py-2 text-black">
                                 <details
                                     className="cursor-pointer"
@@ -67,9 +71,17 @@ const MarketPlace: React.FC = () => {
                                     <div className="ml-4 mt-2 text-gray-700">
                                         <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
                                         <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
-
+                                        <button
+                                            key={model.id}
+                                            onClick={() => handleDownloadModel(model.id || "")}                                            // href={`https://huggingface.co/${model.id}/resolve/main/${file.rfilename}`}
+                                            // target="_blank"
+                                            // rel="noopener noreferrer"
+                                            className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                        >
+                                            Download {model.id}
+                                        </button>
                                         {/* Display Available Files & Download Buttons */}
-                                        {expandedModel === model.id ? (
+                                        {/* {expandedModel === model.id ? (
                                             modelDetails ? (
                                                 modelDetails.siblings.map((file: any) => (
                                                     <a
@@ -85,12 +97,22 @@ const MarketPlace: React.FC = () => {
                                             ) : (
                                                 <p className="text-gray-500">Loading files...</p>
                                             )
-                                        ) : null}
+                                        ) : null} */}
                                     </div>
                                 </details>
                             </li>
                         ))}
                     </ul>
+
+                    {/* Load More Button */}
+                    {visibleCount < data?.length && (
+                        <button
+                            onClick={handleLoadMore}
+                            className="mt-4 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                        >
+                            Load More
+                        </button>
+                    )}
                 </div>
             </main>
         </div>

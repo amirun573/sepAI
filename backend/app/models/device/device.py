@@ -1,4 +1,4 @@
-from app.models.schemas import DeviceCreate, DeviceGPUDetails, DeviceResponse,DeviceSpecResponse, GPUInfo, GPUResponse
+from app.models.schemas.device import DeviceCreate, DeviceGPUDetails, DeviceResponse,DeviceSpecResponse, GPUInfo, GPUResponse
 from app.core.dependencies import get_db
 from typing import List, Dict
 import psutil

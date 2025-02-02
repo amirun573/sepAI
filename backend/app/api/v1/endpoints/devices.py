@@ -1,6 +1,6 @@
 from app.models.device.device import get_device_condition, get_device_spec, get_gpu_info
 from fastapi import APIRouter, Depends, HTTPException
-from app.models.schemas import DeviceCreate, DeviceGPUDetails, DeviceResponse,DeviceSpecResponse
+from app.models.schemas.device import DeviceCreate, DeviceGPUDetails, DeviceResponse,DeviceSpecResponse
 from typing import List, Dict
 
 
