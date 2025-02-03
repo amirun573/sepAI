@@ -1,4 +1,5 @@
 import { APICode } from "../enum/api-code.enum";
+import { Unit } from "../enum/unit.enum";
 
 export interface APIInterface {
   url: string;
@@ -25,4 +26,10 @@ export interface APIHuggingFaceModeListsResponse {
   tags: string[];
   trendingScore: number;
   _id: string;
+  size?: APIHuggingFaceModeSizeResponse;
+}
+
+export interface APIHuggingFaceModeSizeResponse {
+  size: number;
+  unit: Unit;
 }
