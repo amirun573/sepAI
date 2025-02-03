@@ -36,11 +36,10 @@ class ModelController:
     async def download_model(model_id: str = Query(..., description="The ID of the model")):
         saved_model = await model_size(ModelSizeRequest(model_id=model_id))  # Pass as an object
 
-        print("Model size: ", saved_model.size)
         if saved_model.size != "None":
-            return ModelSizeResponse(size=saved_model.size)
+            return ModelSizeResponse(size=saved_model.size, unit=saved_model.unit)
         else:
-            return ModelSizeResponse(size=0)
+            return ModelSizeResponse(size=0, unit='')
 
 model_controller = ModelController()
 router = model_controller.router
