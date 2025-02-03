@@ -1,5 +1,5 @@
 from huggingface_hub import snapshot_download, HfApi, list_repo_files
-from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, ModelSizeCalculate
+from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
 from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
@@ -9,13 +9,12 @@ import socketio
 from tqdm import tqdm
 import time
 import requests
-from bs4 import BeautifulSoup
 
 progress_status: Dict[str, float] = {}
 # Create a Socket.IO server
 
 
-MODEL_DIR = os.path.expanduser("~/Downloads/models")  # Creates a "models" folder inside Downloads
+MODEL_DIR = "models"
 
 # Initialize the API
 api = HfApi()
@@ -31,30 +30,21 @@ def Download_Model_Huggingface(request: DownloadModelRequest):
 
 
 async def Download_Model_With_Progress(model_id: str, sid: str):
-    """Download model with progress updates via Socket.IO."""
-    model_path = os.path.join(MODEL_DIR, model_id)
-    print(f"Downloading model {model_id} to {model_path}")
-    sio = socketio.AsyncServer(cors_allowed_origins="*")
+        """Download model with progress updates via Socket.IO."""
+        model_path = os.path.join(MODEL_DIR, model_id)
+        sio = socketio.AsyncServer(cors_allowed_origins="*")
+        try:
+            if not os.path.exists(model_path):
+                def progress_callback(bytes_downloaded, bytes_total):
+                    """Send progress updates through Socket.IO."""
+                    progress = (bytes_downloaded / bytes_total) * 100
+                    asyncio.create_task(sio.emit("download_progress", {"model_id": model_id, "progress": progress}, to=sid))
 
-    try:
-        if not os.path.exists(model_path):
-            def progress_callback(bytes_downloaded: int, bytes_total: int):
-                """Send progress updates through Socket.IO."""
-                progress = (bytes_downloaded / bytes_total) * 100
-                asyncio.create_task(sio.emit("progress", {"model_id": model_id, "progress": progress}, to=sid))
+                snapshot_download(repo_id=model_id, local_dir=model_path, progress_callback=progress_callback)
 
-            # Download the model with progress callback
-            snapshot_download(
-                repo_id=model_id,
-                local_dir=model_path,
-                progress_callback=progress_callback
-            )
-
-        # Notify the client that the download is complete
-        await sio.emit("download_complete", {"model_id": model_id, "message": "Download completed!"}, to=sid)
-    except Exception as e:
-        # Notify the client of any errors
-        await sio.emit("download_error", {"model_id": model_id, "error": str(e)}, to=sid)
+            await sio.emit("download_complete", {"model_id": model_id, "message": "Download completed!"}, to=sid)
+        except Exception as e:
+            await sio.emit("download_error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
 # Async function to handle the download in the background
@@ -115,9 +105,8 @@ def download_with_progress(model_id, model_path, sid, sio, loop):
 
 
 # 🔹 Background task to run snapshot_download in a separate thread
-async def download_model_in_background(sid, model_id, sio):
+async def download_model_in_background(sid, model_id, model_path, sio):
     try:
-        model_path = os.path.join(MODEL_DIR, model_id)
         os.makedirs(model_path, exist_ok=True)
         await sio.emit("status", {"model_id": model_id, "status": "Starting download"}, to=sid)
 
@@ -135,8 +124,8 @@ async def download_model_in_background(sid, model_id, sio):
         await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
-def get_model_size(model_name: str) -> ModelSizeResponse:
-    """Fetch the total size of a model from Hugging Face API using the `usedStorage` field.
+def get_model_size(model_name: str) -> float:
+    """Fetch the total size of a model from Hugging Face API.
 
     Args:
         model_name (str): The name of the model repository (e.g., "deepseek-ai/DeepSeek-R1").
@@ -144,23 +133,23 @@ def get_model_size(model_name: str) -> ModelSizeResponse:
     Returns:
         float: The total size of the model in MB.
     """
-    # Fetch model information from Hugging Face API
-    api_url = f"https://huggingface.co/api/models/{model_name}"
-    response = requests.get(api_url)
-    data = response.json()
+    api = HfApi()
+    files = list_repo_files(model_name)
+    total_size = 0  # Accumulate the total size in bytes
 
-    # Extract the usedStorage field (in bytes)
-    used_storage_bytes = data.get("usedStorage", 0)
+    # Get the size of each file and accumulate
+    for file in files:
+        file_info = api.model_info(model_name).siblings
+        for sibling in file_info:
+            if sibling.rfilename == file:
+                total_size += sibling.size
+                print(f"{file}: {sibling.size / 1024 / 1024:.2f} MB")
+                break
 
-    used_storage_mb = round(used_storage_bytes / (1024 ** 2),2)
-    used_storage_gb = round(used_storage_bytes / (1024 ** 3),2)
-
-    if used_storage_gb >= 1:
-        return ModelSizeResponse(size = used_storage_gb, unit='GB')
-    else:
-        return ModelSizeResponse(size = used_storage_mb, unit='MB')
-
-
+    # Convert total size to MB and return
+    total_size_mb = total_size / (1024 * 1024)
+    return total_size_mb
+        
 
 async def model_size(body: ModelSizeRequest) -> ModelSizeResponse:
     """Get additional files for a model."""
@@ -169,48 +158,12 @@ async def model_size(body: ModelSizeRequest) -> ModelSizeResponse:
         if not body.model_id:
             raise HTTPException(status_code=400, detail="Model ID is required.")
 
-        size = get_model_size(body.model_id)
+        size_mb = get_model_size(body.model_id)
        
-        return ModelSizeResponse(size=size.size, unit=size.unit)  # Ensure model_path is included
+        print("size_mb==>",size_mb)
+        return ModelSizeResponse(size=size_mb)  # Ensure model_path is included
 
     except Exception as e:
-        print(str(e))
-        return ModelSizeResponse(size=0, unit='')
+        return ModelSizeResponse(size=0)
 
 
-def get_model_size_from_tree(model_name):
-    url = f"https://huggingface.co/{model_name}/tree/main"
-    response = requests.get(url)
-    
-    if response.status_code != 200:
-        print(f"Error: Unable to access model page for {model_name}")
-        return None
-    
-    soup = BeautifulSoup(response.text, "html.parser")
-    
-    total_size = 0
-    for file_entry in soup.find_all("span", class_="truncate"):
-        size_span = file_entry.find_next("span", class_="text-gray-500 text-sm")
-        if size_span:
-            size_text = size_span.text.strip()
-            size_mb = convert_size_to_mb(size_text)
-            if size_mb:
-                total_size += size_mb
-
-    print(f"Estimated Model Size for {model_name}: {total_size:.2f} MB")
-    return total_size
-
-def convert_size_to_mb(size_text):
-    """ Convert size like '2.3 GB' or '512 KB' to MB """
-    try:
-        value, unit = size_text.split()
-        value = float(value)
-        if "GB" in unit:
-            return value * 1024
-        elif "MB" in unit:
-            return value
-        elif "KB" in unit:
-            return value / 1024
-        return None
-    except:
-        return None

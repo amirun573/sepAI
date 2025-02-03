@@ -13,8 +13,3 @@ class ModelSizeRequest(BaseModel):
 
 class ModelSizeResponse(BaseModel):
     size: float
-    unit: str
-
-class ModelSizeCalculate(BaseModel):
-    size: float
-    unit: str
