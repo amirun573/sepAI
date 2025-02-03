@@ -76,6 +76,24 @@ const MarketPlace: React.FC = () => {
     const handleDownloadModel = (model_id: string) => {
         socket.emit("start_download", { model_id });
     };
+
+    const handleModelSize = async (model_id: string) => {
+        try {
+            const response = await API({
+                url: `models/${APICode.model_size}`,
+                API_Code: APICode.model_size,
+                data: {model_id},
+            });
+            if (response.success) {
+                alert(`Model Size: ${response.data.size}`);
+            } else {
+                alert(response.message);
+            }
+        } catch (error: any) {
+            alert(error?.message || "Failed to get model size.")
+        }
+       
+    }
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
 
@@ -102,6 +120,7 @@ const MarketPlace: React.FC = () => {
                                     onToggle={(e) => {
                                         if ((e.target as HTMLDetailsElement).open) {
                                             setExpandedModel(model.id);
+                                            handleModelSize(model.id);
                                             mutate(); // Fetch model details
                                         } else {
                                             setExpandedModel(null);

@@ -1,4 +1,4 @@
-from huggingface_hub import snapshot_download, HfApi
+from huggingface_hub import snapshot_download, HfApi, list_repo_files
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
 from app.core.dependencies import get_db
 from typing import List, Dict
@@ -8,6 +8,7 @@ import asyncio
 import socketio
 from tqdm import tqdm
 import time
+import requests
 
 progress_status: Dict[str, float] = {}
 # Create a Socket.IO server
@@ -123,29 +124,46 @@ async def download_model_in_background(sid, model_id, model_path, sio):
         await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
+def get_model_size(model_name: str) -> float:
+    """Fetch the total size of a model from Hugging Face API.
 
-async def model_size(body: ModelSizeRequest)-> ModelSizeResponse:
+    Args:
+        model_name (str): The name of the model repository (e.g., "deepseek-ai/DeepSeek-R1").
+
+    Returns:
+        float: The total size of the model in MB.
+    """
+    api = HfApi()
+    files = list_repo_files(model_name)
+    total_size = 0  # Accumulate the total size in bytes
+
+    # Get the size of each file and accumulate
+    for file in files:
+        file_info = api.model_info(model_name).siblings
+        for sibling in file_info:
+            if sibling.rfilename == file:
+                total_size += sibling.size
+                print(f"{file}: {sibling.size / 1024 / 1024:.2f} MB")
+                break
+
+    # Convert total size to MB and return
+    total_size_mb = total_size / (1024 * 1024)
+    return total_size_mb
+        
+
+async def model_size(body: ModelSizeRequest) -> ModelSizeResponse:
     """Get additional files for a model."""
-    # Initialize total size counter
     total_size = 0
     try:
-
         if not body.model_id:
             raise HTTPException(status_code=400, detail="Model ID is required.")
-       # Fetch model information
-        model_info = api.model_info(repo_id=body.model_id)
 
-      
+        size_mb = get_model_size(body.model_id)
+       
+        print("size_mb==>",size_mb)
+        return ModelSizeResponse(size=size_mb)  # Ensure model_path is included
 
-        # Iterate through the model's files
-        for file in model_info.siblings:
-            # Check if the file size is available
-            if file.size:
-                total_size += file.size
-
-        # Convert the total size to megabytes (MB)
-        total_size = total_size / (1024 * 1024)
-        return DownloadModelResponse(size = total_size)
     except Exception as e:
-        raise DownloadModelResponse(size = 0)
+        return ModelSizeResponse(size=0)
+
 
