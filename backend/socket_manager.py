@@ -20,4 +20,4 @@ async def start_download(sid, data):
     model_path = f"models/{model_id}"  # 🔹 Ensure the model directory exists
 
     print(f"📥 Starting download for {model_id}")
-    asyncio.create_task(download_model_in_background(sid, model_id, model_path, sio))
+    asyncio.create_task(download_model_in_background(sid, model_id, sio))
