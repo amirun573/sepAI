@@ -16,9 +16,11 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
     const baseURL =
       process.env.NEXT_PUBLIC_API_BASE_URL || `http://127.0.0.1:8000/api/v1/`;
 
+    const fullURL = `${baseURL}${url}`;
+
     switch (API_Code) {
       case APICode.spec_device: {
-        const spec_device = await axios.get(`${baseURL}${url}`);
+        const spec_device = await axios.get(fullURL);
 
         if (!spec_device) {
           throw new Error("Not Getting Any Data");
@@ -34,16 +36,16 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
       }
 
       case APICode.download_model: {
-        const spec_device = await axios.get(`${baseURL}${url}`);
+        const downloadModel = await axios.post(fullURL, data);
 
-        if (!spec_device) {
+        if (!downloadModel) {
           throw new Error("Not Getting Any Data");
         }
 
         response = {
           success: true,
-          status: spec_device.status,
-          data: spec_device.data,
+          status: downloadModel.status,
+          data: downloadModel.data,
         };
 
         break;
