@@ -51,6 +51,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.model_size: {
+        const modelSize = await axios.get(fullURL, data);
+
+        if (!modelSize) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: modelSize.status,
+          data: modelSize.data,
+        };
+
+        break;
+      }
+
       default: {
         throw new Error("API Code not found");
       }

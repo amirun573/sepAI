@@ -1,7 +1,7 @@
 import asyncio
 import os
 from app.models.model.model import MODEL_DIR
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, Query
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
 from app.models.model.model import Download_Model_Huggingface, Download_Model_With_Progress, model_size
 import socketio
@@ -32,14 +32,15 @@ class ModelController:
         await Download_Model_With_Progress(model_id, websocket)
         await websocket.close()
 
-    @router.get("/size", response_model=ModelSizeRequest)
-    async def download_model(request: ModelSizeRequest):
-        saved_model = model_size(request)
+    @router.get("/model_size", response_model=ModelSizeResponse)
+    async def download_model(model_id: str = Query(..., description="The ID of the model")):
+        saved_model = await model_size(ModelSizeRequest(model_id=model_id))  # Pass as an object
 
-        if(saved_model.model_path != "None"):
-            return ModelSizeResponse(size = saved_model.size)
+        print("Model size: ", saved_model.size)
+        if saved_model.size != "None":
+            return ModelSizeResponse(size=saved_model.size)
         else:
-            return ModelSizeResponse(size = 0)
+            return ModelSizeResponse(size=0)
 
 model_controller = ModelController()
 router = model_controller.router
