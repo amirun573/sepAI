@@ -7,7 +7,7 @@ from .os import OSHandler
 
 class MacOSHandler(OSHandler):
     def get_appdata_path(self) -> str:
-        return os.path.expanduser(f"~/Library/Application Support/{self.app_name}")
+        return os.path.expanduser(f"~/Library/{self.app_name}")
     def get_thermal_snapshot(self, timeout=5):
         try:
             process = subprocess.Popen(["pmset", "-g", "thermlog"], stdout=subprocess.PIPE, text=True)

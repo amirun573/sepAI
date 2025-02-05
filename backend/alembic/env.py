@@ -19,8 +19,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Set target metadata for autogenerate to work
+from app.models.models import Base
 target_metadata = Base.metadata
-
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode without connecting to the database."""
     url = str(engine.url)  # Get URL directly from your database engine

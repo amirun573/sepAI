@@ -30,7 +30,7 @@ const Navbar: React.FC = () => {
         {
             label: 'Settings',
             icon: '⚙️',
-            link: '#'
+            link: '/setting'
         }];
 
     useEffect(() => {
