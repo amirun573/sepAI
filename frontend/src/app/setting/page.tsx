@@ -1,8 +1,9 @@
 "use client";
-
+import Navbar from "@/components/Navbar";
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 
-export default function SettingsPage() {
+function Setting() {
     const [theme, setTheme] = useState("light");
     const [emailNotifications, setEmailNotifications] = useState(true);
     const [pushNotifications, setPushNotifications] = useState(false);
@@ -87,3 +88,18 @@ export default function SettingsPage() {
         </div>
     );
 }
+
+export default function SettingPage() {
+
+    return (<Suspense fallback={'Loading'}><div className="min-h-screen flex bg-gray-100">
+        {/* Sidebar */}
+        <Navbar />
+
+        {/* Main Content */}
+        <main className="flex-1 p-8">
+            <Setting />
+
+        </main>
+    </div>
+    </Suspense>)
+} 
