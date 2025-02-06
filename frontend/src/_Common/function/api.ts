@@ -67,6 +67,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.setting: {
+        const setting = await axios.get(fullURL);
+
+        if (!setting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: setting.status,
+          data: setting.data,
+        };
+
+        break;
+      }
+
       default: {
         throw new Error("API Code not found");
       }

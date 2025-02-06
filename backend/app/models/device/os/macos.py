@@ -4,10 +4,17 @@ import subprocess
 
 from app.models.schemas.device import DeviceGPUDetails
 from .os import OSHandler 
+from pathlib import Path
 
 class MacOSHandler(OSHandler):
     def get_appdata_path(self) -> str:
         return os.path.expanduser(f"~/Library/{self.app_name}")
+    def get_model_path(self) -> str:
+        base_path = Path.home() / "Library" / self.app_name
+        model_path = base_path / "model"
+        model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
+
+        return str(model_path)
     def get_thermal_snapshot(self, timeout=5):
         try:
             process = subprocess.Popen(["pmset", "-g", "thermlog"], stdout=subprocess.PIPE, text=True)

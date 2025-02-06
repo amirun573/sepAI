@@ -3,13 +3,19 @@ import { SettingProps } from "@/_Common/interface/setting.interface";
 import Navbar from "@/components/Navbar";
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
-
+import Toggle from "@/components/Toggle";
+import API from "@/_Common/function/api";
+import { APICode } from "@/_Common/enum/api-code.enum";
 function Setting() {
 
     const initialSettings: SettingProps = {
         theme: "dark",
         modelDownloadPath: "/home/user/Downloads",
+        notification: false,
+        log: false,
     }
+    const [toggleNotificationState, setToggleNotificationState] = useState(false);
+    const [toggleLogState, setToggleLogState] = useState(false);
 
     const [settings, setSettings] = useState<SettingProps>(initialSettings);
 
@@ -17,6 +23,22 @@ function Setting() {
     const isElectron = typeof window !== "undefined" && (window as any).electron?.selectFolder;
 
 
+    const settingSetup = async () => {
+        try {
+            const requestSetting = await API({
+                url: `settings/`,
+                API_Code: APICode.setting
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            setSettings(requestSetting.data as SettingProps);
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
     const selectFolder = async () => {
         if (isElectron) {
             // Electron Folder Selection
@@ -36,7 +58,7 @@ function Setting() {
     };
     // Load settings from localStorage on component mount
     useEffect(() => {
-        const savedSettings = JSON.parse(localStorage.getItem("settings") || "{}");
+        settingSetup();
 
     }, []);
 
@@ -57,43 +79,103 @@ function Setting() {
         }
     }
 
+    const saveSettings = async (e: any) => {
+        try {
+
+            console.log(e);
+
+            const { id, value } = e.target;
+
+            if (!id) {
+                throw Error("No ID Found");
+            }
+
+            //e.target.files?.[0]?.name
+            setSettings({ ...settings, [id]: value });
+        } catch (error: any) {
+            console.error(error);
+            alert(error?.message);
+        }
+    }
+
+    const updateNotificationSetting = async () => {
+        try {
+
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+
+    const updateLogSetting = async () => {
+        try {
+
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+
+    useEffect(() => {
+        try {
+            setSettings({ ...settings, ["notification"]: toggleNotificationState });
+
+        } catch (error) {
+
+        }
+    }, [toggleNotificationState]);
+
+    useEffect(() => {
+        try {
+            setSettings({ ...settings, ["log"]: toggleLogState });
+
+        } catch (error) {
+
+        }
+    }, [toggleLogState]);
+
 
 
     return (
         <div className="min-h-screen bg-gray-100 p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* <div className="bg-white p-6 rounded-lg shadow-md">
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Path Download Model
-                        </label>
-                        <input
-                         id="modelDownloadPath"
-                         type="file"
-                         data-webkitdirectory=""
-                         data-directory=""
-                         className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                         onChange={(e) => handleSettings(e)}
-                        />
+            <ul className="bg-white p-4 rounded-md shadow-md">
+                <li className="border-b last:border-none py-2 text-black mb-4">
+                    Path Download Model
+                    <input
+                        id="modelDownloadPath"
+                        type="text"
+                        data-webkitdirectory=""
+                        data-directory=""
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        onChange={(e) => handleSettings(e)}
+                        value={settings.modelDownloadPath}
 
+                    />
+                    <div className="justify-end mt-4">
+                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            Save
+                        </button>
+                    </div>
+                </li>
+
+
+                <li className="border-b last:border-none py-2 text-black mb-4" >
+                    <div className="flex items-center justify-between w-full">
+                        <span className="text-lg font-medium">Notification</span>
+                        <Toggle isOn={settings.notification} onToggle={setToggleNotificationState} />
                     </div>
 
+                </li>
 
-                </div> */}
-
-                <div className="bg-white p-6 rounded-lg shadow-md">
-                    {/* Theme Preference */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Theme
-                        </label>
-
+                <li className="border-b last:border-none py-2 text-black mb-4" >
+                    <div className="flex items-center justify-between w-full">
+                        <span className="text-lg font-medium">Log</span>
+                        <Toggle isOn={settings.log} onToggle={setToggleLogState} />
                     </div>
 
+                </li>
 
-                </div>
-            </div>
+            </ul>
+
 
         </div>
     );
