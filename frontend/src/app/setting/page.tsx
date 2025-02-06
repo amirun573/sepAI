@@ -1,90 +1,100 @@
 "use client";
+import { SettingProps } from "@/_Common/interface/setting.interface";
 import Navbar from "@/components/Navbar";
 import { Suspense } from "react";
 import { useState, useEffect } from "react";
 
 function Setting() {
-    const [theme, setTheme] = useState("light");
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [pushNotifications, setPushNotifications] = useState(false);
 
+    const initialSettings: SettingProps = {
+        theme: "dark",
+        modelDownloadPath: "/home/user/Downloads",
+    }
+
+    const [settings, setSettings] = useState<SettingProps>(initialSettings);
+
+    const [folderPath, setFolderPath] = useState<string | null>(null);
+    const isElectron = typeof window !== "undefined" && (window as any).electron?.selectFolder;
+
+
+    const selectFolder = async () => {
+        if (isElectron) {
+            // Electron Folder Selection
+            const selectedPath = await (window as any).electron.selectFolder();
+            if (selectedPath) setFolderPath(selectedPath);
+        } else {
+            // Web: Trigger file input
+            document.getElementById("folderInput")?.click();
+        }
+    };
+
+    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            setFolderPath(files[0].webkitRelativePath.split("/")[0]); // Get the top-level folder name
+        }
+    };
     // Load settings from localStorage on component mount
     useEffect(() => {
         const savedSettings = JSON.parse(localStorage.getItem("settings") || "{}");
-        setTheme(savedSettings.theme || "light");
-        setEmailNotifications(savedSettings.emailNotifications || true);
-        setPushNotifications(savedSettings.pushNotifications || false);
+
     }, []);
 
-    // Save settings to localStorage
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const settings = {
-            theme,
-            emailNotifications,
-            pushNotifications,
-        };
-        localStorage.setItem("settings", JSON.stringify(settings));
-        console.log("Settings saved:", settings);
-    };
+
+
+    const handleSettings = (e: any) => {
+        try {
+
+            console.log(e);
+
+            const { id, value } = e.target;
+
+            console.log(id, value);
+            //e.target.files?.[0]?.name
+            setSettings({ ...settings, [id]: value });
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+
 
     return (
         <div className="min-h-screen bg-gray-100 p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* <div className="bg-white p-6 rounded-lg shadow-md">
+                    <div className="mb-6">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Path Download Model
+                        </label>
+                        <input
+                         id="modelDownloadPath"
+                         type="file"
+                         data-webkitdirectory=""
+                         data-directory=""
+                         className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                         onChange={(e) => handleSettings(e)}
+                        />
+
+                    </div>
+
+
+                </div> */}
+
+                <div className="bg-white p-6 rounded-lg shadow-md">
                     {/* Theme Preference */}
                     <div className="mb-6">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                             Theme
                         </label>
-                        <select
-                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={theme}
-                            onChange={(e) => setTheme(e.target.value)}
-                        >
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                            <option value="system">System Default</option>
-                        </select>
+
                     </div>
 
-                    {/* Notification Preferences */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Notifications
-                        </label>
-                        <div className="space-y-2">
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={emailNotifications}
-                                    onChange={(e) => setEmailNotifications(e.target.checked)}
-                                    className="mr-2"
-                                />
-                                <span>Email Notifications</span>
-                            </label>
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={pushNotifications}
-                                    onChange={(e) => setPushNotifications(e.target.checked)}
-                                    className="mr-2"
-                                />
-                                <span>Push Notifications</span>
-                            </label>
-                        </div>
-                    </div>
 
-                    {/* Save Button */}
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        Save Changes
-                    </button>
-                </form>
+                </div>
             </div>
+
         </div>
     );
 }
