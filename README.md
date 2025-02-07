@@ -14,6 +14,18 @@ Prerequisites
 3. `source venv/bin/activate`
 4.  `uvicorn main:app --reload`
 
+For Alambic migration. Can run
+1. `alembic revision --autogenerate -m "{message}"`
+2. Then, run `alembic upgrade head`
+
+SQLite
+Check Database Path
+1. python
+2. from database import DATABASE_PATH
+3. print(DATABASE_PATH)
+
+
+
 # Run Nextjs App Route Typescript (Frontend)
 1. `cd frontend`
 2. Run `npm run dev`

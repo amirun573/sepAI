@@ -67,6 +67,54 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.setting: {
+        const setting = await axios.get(fullURL);
+
+        if (!setting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: setting.status,
+          data: setting.data,
+        };
+
+        break;
+      }
+
+      case APICode.update_model_path_setting: {
+        const modelPathSetting = await axios.patch(fullURL, data);
+
+        if (!modelPathSetting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: modelPathSetting.status,
+          data: modelPathSetting.data,
+        };
+
+        break;
+      }
+
+      case APICode.update_model_notification_setting: {
+        const notificationSetting = await axios.patch(fullURL, data);
+
+        if (!notificationSetting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: notificationSetting.status,
+          data: notificationSetting.data,
+        };
+
+        break;
+      }
+
       default: {
         throw new Error("API Code not found");
       }

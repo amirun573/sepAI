@@ -1,89 +1,237 @@
 "use client";
-
+import { SettingProps } from "@/_Common/interface/setting.interface";
+import Navbar from "@/components/Navbar";
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
+import Toggle from "@/components/Toggle";
+import API from "@/_Common/function/api";
+import { APICode } from "@/_Common/enum/api-code.enum";
+function Setting() {
 
-export default function SettingsPage() {
-    const [theme, setTheme] = useState("light");
-    const [emailNotifications, setEmailNotifications] = useState(true);
-    const [pushNotifications, setPushNotifications] = useState(false);
+    const initialSettings: SettingProps = {
+        theme: "dark",
+        modelDownloadPath: "/home/user/Downloads",
+        notification: false,
+        log: false,
+    }
+    const [toggleNotificationState, setToggleNotificationState] = useState(false);
+    const [toggleLogState, setToggleLogState] = useState(false);
 
+    const [settings, setSettings] = useState<SettingProps>(initialSettings);
+
+    const [folderPath, setFolderPath] = useState<string | null>(null);
+    const isElectron = typeof window !== "undefined" && (window as any).electron?.selectFolder;
+    const [isLoadingSaveModelPathDownload, setIsLoadingSaveModelPathDownload] = useState<boolean>(false);
+
+
+    const settingSetup = async () => {
+        try {
+            const requestSetting = await API({
+                url: `settings/`,
+                API_Code: APICode.setting
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            setSettings(requestSetting.data as SettingProps);
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+    const selectFolder = async () => {
+        if (isElectron) {
+            // Electron Folder Selection
+            const selectedPath = await (window as any).electron.selectFolder();
+            if (selectedPath) setFolderPath(selectedPath);
+        } else {
+            // Web: Trigger file input
+            document.getElementById("folderInput")?.click();
+        }
+    };
+
+    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            setFolderPath(files[0].webkitRelativePath.split("/")[0]); // Get the top-level folder name
+        }
+    };
     // Load settings from localStorage on component mount
     useEffect(() => {
-        const savedSettings = JSON.parse(localStorage.getItem("settings") || "{}");
-        setTheme(savedSettings.theme || "light");
-        setEmailNotifications(savedSettings.emailNotifications || true);
-        setPushNotifications(savedSettings.pushNotifications || false);
+        settingSetup();
+
     }, []);
 
-    // Save settings to localStorage
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const settings = {
-            theme,
-            emailNotifications,
-            pushNotifications,
-        };
-        localStorage.setItem("settings", JSON.stringify(settings));
-        console.log("Settings saved:", settings);
-    };
+
+
+    const handleSettings = (e: any) => {
+        try {
+
+            console.log(e);
+
+            const { id, value } = e.target;
+
+            console.log(id, value);
+            //e.target.files?.[0]?.name
+            setSettings({ ...settings, [id]: value });
+        } catch (error) {
+            console.error(error);
+        }
+    }
+
+    const saveSettings = async (e: any) => {
+        try {
+
+            console.log(e);
+
+            const { id, value } = e.target;
+
+            if (!id) {
+                throw Error("No ID Found");
+            }
+
+            //e.target.files?.[0]?.name
+            setSettings({ ...settings, [id]: value });
+        } catch (error: any) {
+            console.error(error);
+            alert(error?.message);
+        }
+    }
+
+    const updateNotificationSetting = async () => {
+        try {
+
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+
+    const updateLogSetting = async () => {
+        try {
+            const requestSetting = await API({
+                url: `settings/notificationEnabler`,
+                API_Code: APICode.update_model_notification_setting,
+                data: {
+                    modelDownloadPath: settings.notification
+                }
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
+        } catch (error: any) {
+            alert(error?.message);
+        } finally {
+
+        }
+    }
+
+    const updatePathDownloadModel = async () => {
+        setIsLoadingSaveModelPathDownload(true);
+        try {
+            const requestSetting = await API({
+                url: `settings/modelPathModel`,
+                API_Code: APICode.update_model_path_setting,
+                data: {
+                    modelDownloadPath: settings.modelDownloadPath
+                }
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
+        } catch (error: any) {
+            alert(error?.message);
+        } finally {
+            setIsLoadingSaveModelPathDownload(false);
+
+        }
+    }
+
+    useEffect(() => {
+        try {
+            setSettings({ ...settings, ["notification"]: toggleNotificationState });
+
+
+        } catch (error) {
+
+        }
+    }, [toggleNotificationState]);
+
+    useEffect(() => {
+        try {
+            setSettings({ ...settings, ["log"]: toggleLogState });
+
+        } catch (error) {
+
+        }
+    }, [toggleLogState]);
+
+
 
     return (
         <div className="min-h-screen bg-gray-100 p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <form onSubmit={handleSubmit}>
-                    {/* Theme Preference */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Theme
-                        </label>
-                        <select
-                            className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={theme}
-                            onChange={(e) => setTheme(e.target.value)}
-                        >
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                            <option value="system">System Default</option>
-                        </select>
+            <ul className="bg-white p-4 rounded-md shadow-md">
+                <li className="border-b last:border-none py-2 text-black mb-4">
+                    Path Download Model
+                    <input
+                        id="modelDownloadPath"
+                        type="text"
+                        data-webkitdirectory=""
+                        data-directory=""
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        onChange={(e) => handleSettings(e)}
+                        value={settings.modelDownloadPath}
+
+                    />
+                    <div className="justify-end mt-4">
+                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" onClick={updatePathDownloadModel}>
+                            Save
+                        </button>
+                    </div>
+                </li>
+
+
+                {/* <li className="border-b last:border-none py-2 text-black mb-4" >
+                    <div className="flex items-center justify-between w-full">
+                        <span className="text-lg font-medium">Notification</span>
+                        <Toggle isOn={settings.notification} onToggle={setToggleNotificationState} />
                     </div>
 
-                    {/* Notification Preferences */}
-                    <div className="mb-6">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Notifications
-                        </label>
-                        <div className="space-y-2">
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={emailNotifications}
-                                    onChange={(e) => setEmailNotifications(e.target.checked)}
-                                    className="mr-2"
-                                />
-                                <span>Email Notifications</span>
-                            </label>
-                            <label className="flex items-center">
-                                <input
-                                    type="checkbox"
-                                    checked={pushNotifications}
-                                    onChange={(e) => setPushNotifications(e.target.checked)}
-                                    className="mr-2"
-                                />
-                                <span>Push Notifications</span>
-                            </label>
-                        </div>
+                </li>
+
+                <li className="border-b last:border-none py-2 text-black mb-4" >
+                    <div className="flex items-center justify-between w-full">
+                        <span className="text-lg font-medium">Log</span>
+                        <Toggle isOn={settings.log} onToggle={setToggleLogState} />
                     </div>
 
-                    {/* Save Button */}
-                    <button
-                        type="submit"
-                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        Save Changes
-                    </button>
-                </form>
-            </div>
+                </li> */}
+
+            </ul>
+
+
         </div>
     );
 }
+
+export default function SettingPage() {
+
+    return (<Suspense fallback={'Loading'}><div className="min-h-screen flex bg-gray-100">
+        {/* Sidebar */}
+        <Navbar />
+
+        {/* Main Content */}
+        <main className="flex-1 p-8">
+            <Setting />
+
+        </main>
+    </div>
+    </Suspense>)
+} 

@@ -1,5 +1,5 @@
 # app/models/models.py
-from sqlalchemy import Column, Integer, String, Float
+from sqlalchemy import Column, Integer, String, Float, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -22,3 +22,10 @@ class PathDownloadModel(Base):
     __tablename__ = "download_path_models"
     path_download_id = Column(Integer, primary_key=True, index=True)
     path_download_name = Column(String, index=True)
+
+class Setting (Base):
+    __tablename__ = "settings"
+    setting_id = Column(Integer, primary_key=True, index=True)
+    path_store_name_main = Column(String, index=True)
+    notification_enable = Column(Boolean, index=True, default=True)
+    log_enable = Column(Boolean, index=True, default=True)
