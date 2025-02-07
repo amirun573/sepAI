@@ -21,6 +21,7 @@ function Setting() {
 
     const [folderPath, setFolderPath] = useState<string | null>(null);
     const isElectron = typeof window !== "undefined" && (window as any).electron?.selectFolder;
+    const [isLoadingSaveModelPathDownload, setIsLoadingSaveModelPathDownload] = useState<boolean>(false);
 
 
     const settingSetup = async () => {
@@ -108,15 +109,54 @@ function Setting() {
 
     const updateLogSetting = async () => {
         try {
+            const requestSetting = await API({
+                url: `settings/notificationEnabler`,
+                API_Code: APICode.update_model_notification_setting,
+                data: {
+                    modelDownloadPath: settings.notification
+                }
+            });
 
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
         } catch (error: any) {
             alert(error?.message);
+        } finally {
+
+        }
+    }
+
+    const updatePathDownloadModel = async () => {
+        setIsLoadingSaveModelPathDownload(true);
+        try {
+            const requestSetting = await API({
+                url: `settings/modelPathModel`,
+                API_Code: APICode.update_model_path_setting,
+                data: {
+                    modelDownloadPath: settings.modelDownloadPath
+                }
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
+        } catch (error: any) {
+            alert(error?.message);
+        } finally {
+            setIsLoadingSaveModelPathDownload(false);
+
         }
     }
 
     useEffect(() => {
         try {
             setSettings({ ...settings, ["notification"]: toggleNotificationState });
+
 
         } catch (error) {
 
@@ -151,14 +191,14 @@ function Setting() {
 
                     />
                     <div className="justify-end mt-4">
-                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" onClick={updatePathDownloadModel}>
                             Save
                         </button>
                     </div>
                 </li>
 
 
-                <li className="border-b last:border-none py-2 text-black mb-4" >
+                {/* <li className="border-b last:border-none py-2 text-black mb-4" >
                     <div className="flex items-center justify-between w-full">
                         <span className="text-lg font-medium">Notification</span>
                         <Toggle isOn={settings.notification} onToggle={setToggleNotificationState} />
@@ -172,7 +212,7 @@ function Setting() {
                         <Toggle isOn={settings.log} onToggle={setToggleLogState} />
                     </div>
 
-                </li>
+                </li> */}
 
             </ul>
 
