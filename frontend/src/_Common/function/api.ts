@@ -115,6 +115,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.model_lists: {
+        const modelLists = await axios.get(fullURL);
+
+        if (!modelLists) {
+          throw new Error("Not Getting Any Models");
+        }
+
+        response = {
+          success: true,
+          status: modelLists.status,
+          data: modelLists.data,
+        };
+
+        break;
+      }
+
       default: {
         throw new Error("API Code not found");
       }

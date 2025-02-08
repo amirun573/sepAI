@@ -7,7 +7,7 @@ import useSWR from "swr";
 import API from "@/_Common/function/api";
 import { APICode } from "@/_Common/enum/api-code.enum";
 import { io } from "socket.io-client";
-import { APIHuggingFaceModeListsResponse, APIHuggingFaceModeSizeResponse } from "@/_Common/interface/api.interface";
+import { APIGetSaveModelLists, APIHuggingFaceModeListsResponse, APIHuggingFaceModeSizeResponse } from "@/_Common/interface/api.interface";
 import { Unit } from "@/_Common/enum/unit.enum";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 const socket = io("http://127.0.0.1:8000", {
@@ -31,7 +31,25 @@ const MarketPlace: React.FC = () => {
         size: 0,
         unit: Unit.GB
     });
+    const [saveListsModel, setSaveListsModel] = useState<APIGetSaveModelLists[]>([]);
 
+
+    const getModelDownload = async () => {
+        try {
+            const requestModels = await API({
+                url: 'models/',
+                API_Code: APICode.model_lists
+            });
+
+            if(!requestModels.success){
+                throw Error("Failed To Load Model");
+            }
+
+            setSaveListsModel(requestModels.data?.models as APIGetSaveModelLists[]);
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
     const handleLoadMore = () => {
         setVisibleCount((prev) => prev + 10); // Load 10 more models
     };
@@ -79,6 +97,13 @@ const MarketPlace: React.FC = () => {
         };
     }, []);
 
+    useEffect(()=> {
+        try {
+            getModelDownload(); 
+        } catch (error) {
+            
+        }
+    }, []);
 
     const handleDownloadModel = (model_id: string) => {
         socket.emit("start_download", { model_id });
@@ -86,35 +111,42 @@ const MarketPlace: React.FC = () => {
 
     const handleModelSize = async (model_id: string) => {
         try {
-            const response = await API({
-                url: `models/${APICode.model_size}?model_id=${model_id}`,
-                API_Code: APICode.model_size,
-                data: { model_id },
-            });
-
-            if (!response || !response.success) {
-                throw new Error("Failed to get model size.");
-            }
 
             const modelIndex = modelLists.findIndex((model) => model.id === model_id);
 
-            // Update the size of the specific model
-            // Once model details are fetched, update the model size
-            // If model is found, update its size
+            if (modelLists[modelIndex]?.size === undefined) {
 
-            if (modelIndex === -1) {
-                throw Error("Model not found");
+                const response = await API({
+                    url: `models/${APICode.model_size}?model_id=${model_id}`,
+                    API_Code: APICode.model_size,
+                    data: { model_id },
+                });
+
+                if (!response || !response.success) {
+                    throw new Error("Failed to get model size.");
+                }
+
+
+                // Update the size of the specific model
+                // Once model details are fetched, update the model size
+                // If model is found, update its size
+
+                if (modelIndex === -1) {
+                    throw Error("Model not found");
+                }
+
+                const updatedModelLists = modelLists.map((model, index) =>
+                    index === modelIndex ? { ...model, size: response.data } : model
+                );
+
+                // Update state
+                setModelLists(updatedModelLists);
+
+                // If using SWR, update the cache
+                // mutate("https://huggingface.co/api/models", updatedModelLists, false);
             }
 
-            const updatedModelLists = modelLists.map((model, index) =>
-                index === modelIndex ? { ...model, size: response.data } : model
-            );
 
-            // Update state
-            setModelLists(updatedModelLists);
-
-            // If using SWR, update the cache
-            // mutate("https://huggingface.co/api/models", updatedModelLists, false);
 
 
 
@@ -166,6 +198,22 @@ const MarketPlace: React.FC = () => {
                                         <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
                                         <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
                                         <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
+                                        <p><strong>Tags:</strong> </p>
+                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                            {model.tags?.length ? (
+                                                model.tags.map((tag: string, index: number) => (
+                                                    <span
+                                                        key={index}
+                                                        className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-sm text-gray-500">N/A</span>
+                                            )}
+                                        </div>
+
 
                                         <p>Model Size: {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
 

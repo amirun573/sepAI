@@ -33,3 +33,12 @@ export interface APIHuggingFaceModeSizeResponse {
   size: number;
   unit: Unit;
 }
+
+export interface APIGetSaveModelLists {
+
+  model_id: number,
+  model_name: string,
+  path: string
+  size: number,
+  unit: Unit
+}

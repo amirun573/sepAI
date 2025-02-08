@@ -20,7 +20,8 @@ async def Get_Settings():
     """Fetch settings from the database and return errors properly."""
     async with async_session_maker() as db:
         try:
-            result = await db.execute(select(Setting))  # ✅ Correct way to fetch data
+            # ✅ Correct way to fetch data
+            result = await db.execute(select(Setting))
             settings = result.scalars().first()  # ✅ Extract the first result
 
             # If settings are not found, return a default response
@@ -46,8 +47,15 @@ async def Get_Settings():
             print(f"Unexpected error: {e}")
             return {"error": str(e)}
 
+
 async def Update_Model_Path(new_path: str):
     """Update or create path_store_name_main in settings table."""
+    if not os.path.exists(new_path):
+        try:
+            os.makedirs(new_path)
+        except OSError as e:
+            return {"error": f"Failed to create path: {e}"}
+
     async with async_session_maker() as db:  # ✅ Proper async session handling
         try:
             result = await db.execute(select(Setting))
@@ -71,6 +79,7 @@ async def Update_Model_Path(new_path: str):
             await db.rollback()
             print(f"Unexpected error: {e}")
             return {"error": str(e)}
+
 
 async def Update_Notification(notification_status: bool):
     """Update or create path_store_name_main in settings table."""

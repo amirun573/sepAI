@@ -1,11 +1,8 @@
-import asyncio
-import os
-from app.models.model.model import MODEL_DIR
+
 from fastapi import APIRouter, WebSocket, Query
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
-from app.models.model.model import Download_Model_Huggingface, Download_Model_With_Progress, model_size
-import socketio
-from huggingface_hub import snapshot_download
+from app.models.model.model import Download_Model_Huggingface, Download_Model_With_Progress, model_size, Get_Model_Downloaded
+
 
 
 
@@ -40,6 +37,13 @@ class ModelController:
             return ModelSizeResponse(size=saved_model.size, unit=saved_model.unit)
         else:
             return ModelSizeResponse(size=0, unit='')
+        
+    
+    @router.get("/")
+    async def get_models():
+        return await Get_Model_Downloaded()  # Pass as an object
+
+      
 
 model_controller = ModelController()
 router = model_controller.router
