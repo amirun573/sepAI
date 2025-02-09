@@ -41,7 +41,7 @@ const MarketPlace: React.FC = () => {
                 API_Code: APICode.model_lists
             });
 
-            if(!requestModels.success){
+            if (!requestModels.success) {
                 throw Error("Failed To Load Model");
             }
 
@@ -66,7 +66,12 @@ const MarketPlace: React.FC = () => {
             setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
         });
 
-        socket.on("download_complete", (data) => {
+        socket.on("status", (data) => {
+            console.log("🚀 Received Progress Update:", data);
+            // setProgress((prev) => ({ ...prev, [data.model_id]: data.status }));
+        });
+
+        socket.on("completed", (data) => {
             console.log("🎉 Model Downloaded:", data);
             alert(`🎉 Model ${data.model_id} downloaded successfully!`);
         });
@@ -87,21 +92,21 @@ const MarketPlace: React.FC = () => {
         });
 
         // Cleanup event listeners
-        return () => {
-            socket.off("connect");
-            socket.off("progress");
-            socket.off("download_complete");
-            socket.off("download_error");
-            socket.off("disconnect");
-            socket.off("connect_error");
-        };
+        // return () => {
+        //     socket.off("connect");
+        //     socket.off("progress");
+        //     socket.off("download_complete");
+        //     socket.off("download_error");
+        //     socket.off("disconnect");
+        //     socket.off("connect_error");
+        // };
     }, []);
 
-    useEffect(()=> {
+    useEffect(() => {
         try {
-            getModelDownload(); 
+            getModelDownload();
         } catch (error) {
-            
+
         }
     }, []);
 
@@ -155,6 +160,20 @@ const MarketPlace: React.FC = () => {
         }
     };
 
+    const checkModelDownloaded = (model_id: string) => {
+        try {
+            if (saveListsModel.length !== 0) {
+                const modelIndex: number = saveListsModel.findIndex(model => model.model_name === model_id)
+
+                if (modelIndex !== -1) {
+
+                }
+            }
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
 
@@ -189,6 +208,7 @@ const MarketPlace: React.FC = () => {
 
                                         if (isOpen) {
                                             handleModelSize(model.id);
+                                            checkModelDownloaded(model.id);
                                             mutate(); // Fetch model details
                                         }
                                     }}
@@ -198,6 +218,10 @@ const MarketPlace: React.FC = () => {
                                         <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
                                         <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
                                         <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
+                                        <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag|| "N/A"}</p>
+                                        <p><strong>Trending Score:</strong> {model.trendingScore || "N/A"}</p>
+                                        <p><strong>Model Size:</strong> {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
+
                                         <p><strong>Tags:</strong> </p>
                                         <div className="flex flex-wrap gap-2 mb-4 mt-2">
                                             {model.tags?.length ? (
@@ -215,7 +239,6 @@ const MarketPlace: React.FC = () => {
                                         </div>
 
 
-                                        <p>Model Size: {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
 
                                         <button
                                             key={model.id}

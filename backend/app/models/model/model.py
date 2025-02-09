@@ -11,7 +11,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from database import async_session_maker  # Import async session maker
-from app.models.models import Model
+from app.models.models import Model, Setting
 from sqlalchemy.exc import SQLAlchemyError  # Import to catch DB errors
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,66 +81,108 @@ def track_download_progress(model_path, total_size):
 # Run blocking task in executor
 
 
-def download_with_progress(model_id, model_path, sid, sio, loop):
-    try:
-        # Emit start event
-        asyncio.run_coroutine_threadsafe(
-            sio.emit("status", {"model_id": model_id,
-                     "status": "Initializing download"}, to=sid),
-            loop,
-        )
+async def get_download_path():
+    """Fetch the model download path from the database."""
+    async with async_session_maker() as db:
+        result = await db.execute(select(Setting))
+        setting = result.scalars().first()
+        if setting and setting.path_store_name_main:
+            return setting.path_store_name_main
+        return None  # Handle missing path gracefully
 
-        # Start the download
+
+async def get_model_size_from_huggingface(model_id):
+    """Fetch the estimated model size from Hugging Face Hub."""
+    try:
+        api = HfApi()
+        model_info = api.model_info(model_id)
+        return model_info.disk_size  # Returns size in bytes
+    except Exception:
+        return None  # If API call fails, fallback to dynamic estimation
+
+
+async def get_folder_size(folder_path):
+    """Get the total size of a folder (all files inside it)."""
+    return sum(
+        os.path.getsize(os.path.join(dirpath, filename))
+        for dirpath, _, filenames in os.walk(folder_path)
+        for filename in filenames
+    )
+
+
+async def download_with_progress(model_id, sid, sio, loop):
+    try:
+        print("Starting download process...")
+
+        # Fetch the download path from the database
+        download_path = await get_download_path()
+
+        if not download_path:
+            raise ValueError("Download path is not set in the database")
+
+        # Model-specific directory
+        model_path = os.path.join(download_path, model_id)
+        os.makedirs(model_path, exist_ok=True)  # Ensure path exists
+
+        # Emit initialization event
+        await sio.emit("status", {"model_id": model_id, "status": "Initializing download"}, to=sid)
+
+        # Get estimated total size of model (optional: use Hugging Face API)
+        expected_size = None  # No API call here, we calculate dynamically
+
+        # Start snapshot_download in a separate thread
         final_path = snapshot_download(
             repo_id=model_id, local_dir=model_path, resume_download=True)
 
-        # Get total file size after download starts
-        total_size = sum(
-            os.path.getsize(os.path.join(dirpath, filename))
-            for dirpath, _, filenames in os.walk(final_path)
-            for filename in filenames
-        )
-
-        # Track progress manually
-        while True:
-            progress = track_download_progress(final_path, total_size)
-            asyncio.run_coroutine_threadsafe(
-                sio.emit("progress", {"model_id": model_id,
-                         "progress": round(progress, 2)}, to=sid),
-                loop,
-            )
-            if progress >= 100:
-                break
-            time.sleep(1)  # Check progress every 1 second
-
         # Emit completion event
-        asyncio.run_coroutine_threadsafe(
-            sio.emit("completed", {"model_id": model_id,
-                     "model_path": final_path}, to=sid),
-            loop,
-        )
+        await sio.emit("completed", {"model_id": model_id, "model_path": final_path}, to=sid)
 
         return final_path
+
     except Exception as e:
-        asyncio.run_coroutine_threadsafe(
-            sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid),
-            loop,
-        )
+        await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
 # 🔹 Background task to run snapshot_download in a separate thread
+
+
 async def download_model_in_background(sid, model_id, sio):
     try:
-        model_path = os.path.join(MODEL_DIR, model_id)
-        os.makedirs(model_path, exist_ok=True)
         await sio.emit("status", {"model_id": model_id, "status": "Starting download"}, to=sid)
+        print("Starting download process...")
 
-        loop = asyncio.get_event_loop()
+        # Use `asyncio.create_task()` to start the async function properly
+        final_path = await download_with_progress(model_id, sid, sio, asyncio.get_event_loop())
 
-        # Pass `loop` as an argument to ensure coroutines run properly
-        final_path = await loop.run_in_executor(
-            None, download_with_progress, model_id, model_path, sid, sio, loop
-        )
+        # Calculate model size
+        # Function to calculate total size
+        total_size = await get_folder_size(final_path)
+        size_mb = round(total_size / (1024 * 1024), 2)  # Convert bytes to MB
+
+        # Save details to database
+        async with async_session_maker() as db:
+
+            # Check if model exists
+            result = await db.execute(select(Model).where(Model.model_id == model_id))
+            existing_model = result.scalars().first()
+
+            if existing_model:
+                # Update existing model
+                existing_model.path = final_path
+                existing_model.size = size_mb
+            else:
+                # Insert new model entry
+                new_model = Model(
+                    model_id=model_id,
+                    model_name=model_id,  # You can change this if you have a proper name
+                    path=final_path,
+                    size=size_mb,
+                    unit="MB"
+                )
+                db.add(new_model)
+
+            await db.commit()
+        print("final_path-->", final_path)
 
         await sio.emit("status", {"model_id": model_id, "status": f"Download complete, saved at {final_path}"}, to=sid)
         return final_path
