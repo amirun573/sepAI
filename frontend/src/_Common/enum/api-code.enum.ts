@@ -6,5 +6,6 @@ export enum APICode {
     update_model_path_setting = 'update_model_path_setting',
     update_model_notification_setting = 'update_model_notification_setting',
     model_lists = "model_lists",
+    delete_model = "delete_model",
 
   }

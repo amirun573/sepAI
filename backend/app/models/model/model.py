@@ -148,8 +148,7 @@ async def download_with_progress(model_id, sid, sio, loop):
 
 async def download_model_in_background(sid, model_id, sio):
     try:
-        await sio.emit("status", {"model_id": model_id, "status": "Starting download"}, to=sid)
-        print("Starting download process...")
+        await sio.emit("status", {"model_id": model_id, "status": "Initialize Download"}, to=sid)
 
         # Use `asyncio.create_task()` to start the async function properly
         final_path = await download_with_progress(model_id, sid, sio, asyncio.get_event_loop())
@@ -157,28 +156,30 @@ async def download_model_in_background(sid, model_id, sio):
         # Calculate model size
         # Function to calculate total size
         total_size = await get_folder_size(final_path)
-        size_mb = round(total_size / (1024 * 1024), 2)  # Convert bytes to MB
+
+        size_storage = convert_storage_unit(total_size)
 
         # Save details to database
         async with async_session_maker() as db:
 
             # Check if model exists
-            result = await db.execute(select(Model).where(Model.model_id == model_id))
+            result = await db.execute(select(Model).where(Model.model_name == model_id))
             existing_model = result.scalars().first()
 
             if existing_model:
                 # Update existing model
                 existing_model.path = final_path
-                existing_model.size = size_mb
+                existing_model.size = size_storage.size
+                existing_model.unit = size_storage.unit
             else:
                 # Insert new model entry
                 new_model = Model(
-                    model_id=model_id,
                     model_name=model_id,  # You can change this if you have a proper name
                     path=final_path,
-                    size=size_mb,
-                    unit="MB"
+                    size=size_storage.size,
+                    unit=size_storage.unit
                 )
+
                 db.add(new_model)
 
             await db.commit()
@@ -187,8 +188,23 @@ async def download_model_in_background(sid, model_id, sio):
         await sio.emit("status", {"model_id": model_id, "status": f"Download complete, saved at {final_path}"}, to=sid)
         return final_path
 
+    except SQLAlchemyError as e:
+        await db.rollback()
+        print(f"Database error: {e}")
+        return {"error": "Database error occurred"}
+
     except Exception as e:
         await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
+
+
+def convert_storage_unit(size: float) -> ModelSizeResponse:
+    used_storage_mb = round(size / (1024 ** 2), 2)
+    used_storage_gb = round(size / (1024 ** 3), 2)
+
+    if used_storage_gb >= 1:
+        return ModelSizeResponse(size=used_storage_gb, unit='GB')
+    else:
+        return ModelSizeResponse(size=used_storage_mb, unit='MB')
 
 
 def get_model_size(model_name: str) -> ModelSizeResponse:

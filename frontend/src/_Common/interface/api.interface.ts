@@ -27,6 +27,7 @@ export interface APIHuggingFaceModeListsResponse {
   trendingScore: number;
   _id: string;
   size?: APIHuggingFaceModeSizeResponse;
+  downloaded?: boolean;
 }
 
 export interface APIHuggingFaceModeSizeResponse {

@@ -114,7 +114,7 @@ const MarketPlace: React.FC = () => {
         socket.emit("start_download", { model_id });
     };
 
-    const handleModelSize = async (model_id: string) => {
+    const handleModelDetails = async (model_id: string) => {
         try {
 
             const modelIndex = modelLists.findIndex((model) => model.id === model_id);
@@ -160,19 +160,70 @@ const MarketPlace: React.FC = () => {
         }
     };
 
-    const checkModelDownloaded = (model_id: string) => {
+    const checkModelDownloaded = async (model_id: string) => {
         try {
-            if (saveListsModel.length !== 0) {
-                const modelIndex: number = saveListsModel.findIndex(model => model.model_name === model_id)
+            if (modelLists.length !== 0) {
+                const modelListIndex = modelLists.findIndex(model => model.modelId === model_id);
 
-                if (modelIndex !== -1) {
+                if (modelListIndex !== -1 && modelLists[modelListIndex].size === undefined) {
+                    const saveListIndex = saveListsModel.findIndex(model => model.model_name === model_id);
 
+                    if (saveListIndex !== -1 && modelListIndex !== -1) {
+                        console.log(`Model ID ${model_id} exists in both lists.`);
+
+                        modelLists[modelListIndex].size = {
+                            size: saveListsModel[saveListIndex].size || 0,
+                            unit: saveListsModel[saveListIndex].unit as Unit || Unit.GB
+                        }
+
+                        modelLists[modelListIndex].downloaded = true;
+
+                        setModelLists(modelLists);
+
+                    } else if (modelListIndex !== -1) {
+                        await handleModelDetails(model_id);
+                    } else {
+                        throw Error(`Model ID ${model_id} not found in either list.`);
+                    }
                 }
+
+
+
             }
         } catch (error: any) {
             alert(error?.message);
         }
     }
+
+    const handleDeleteModel = async (modelId: string) => {
+
+        if(!modelId){
+            throw Error("No Model Passed To Delete");
+        }
+        const confirmDelete = window.confirm(`Are you sure you want to delete model "${modelId}"?`);
+
+        if (!confirmDelete) return; // If user cancels, exit function
+
+        try {
+            const response = await API({
+                url: 'models/delete',
+                API_Code: APICode.delete_model
+            });
+
+            if (!response.success) {
+                throw new Error(`Failed to delete model: ${modelId}`);
+            }
+
+            console.log(`Model ${modelId} deleted successfully`);
+
+            // Optionally, refresh the list or update state
+            setModelLists(prev => prev.filter(model => model.modelId !== modelId));
+
+        } catch (error) {
+            console.error("Error deleting model:", error);
+        }
+    };
+
 
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
@@ -207,7 +258,6 @@ const MarketPlace: React.FC = () => {
                                         setExpandedModel(isOpen ? model.id : null);
 
                                         if (isOpen) {
-                                            handleModelSize(model.id);
                                             checkModelDownloaded(model.id);
                                             mutate(); // Fetch model details
                                         }
@@ -218,7 +268,7 @@ const MarketPlace: React.FC = () => {
                                         <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
                                         <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
                                         <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
-                                        <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag|| "N/A"}</p>
+                                        <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag || "N/A"}</p>
                                         <p><strong>Trending Score:</strong> {model.trendingScore || "N/A"}</p>
                                         <p><strong>Model Size:</strong> {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
 
@@ -240,15 +290,35 @@ const MarketPlace: React.FC = () => {
 
 
 
-                                        <button
-                                            key={model.id}
-                                            onClick={() => handleDownloadModel(model.id || "")}                                            // href={`https://huggingface.co/${model.id}/resolve/main/${file.rfilename}`}
-                                            // target="_blank"
-                                            // rel="noopener noreferrer"
-                                            className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                        >
-                                            Download {model.id}
-                                        </button>
+                                        {model.downloaded ? (
+                                            // Grouped buttons when the model is downloaded
+                                            <div className="mt-4 flex space-x-2 justify-end">
+                                                <button
+                                                    key={`update-${model.id}`}
+                                                    onClick={() => handleDownloadModel(model.id || "")}
+                                                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                                                >
+                                                    Update
+                                                </button>
+                                                <button
+                                                    key={`delete-${model.id}`}
+                                                    onClick={() => handleDeleteModel(model.id || "")}
+                                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            // Download button when model is not downloaded
+                                            <button
+                                                key={model.id}
+                                                onClick={() => handleDownloadModel(model.id || "")}
+                                                className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                            >
+                                                Download {model.id}
+                                            </button>
+                                        )}
+
                                         {/* Display progress only when it's not empty */}
                                         {progress && Object.keys(progress).length > 0 && (
                                             <div>
