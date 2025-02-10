@@ -542,11 +542,12 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 return None
 
             # Hugging Face stores models as "model--{model_id}" inside cache
-            model_path = os.path.join(cache_path, model_id.replace(
-                '/', '--'))  # No "model--" prefix
+            # model_path = os.path.join(cache_path, model_id.replace(
+            #     '/', '--'))  # No "model--" prefix
 
-            # model_path = os.path.join(cache_path, model_folder_name)
+            model_path = os.path.join(cache_path, f"models--{model_id.replace('/', '--')}")
             os.makedirs(model_path, exist_ok=True)
+            print("model_path -->", model_path)
 
             # Check if model already exists in DB
             existing_model = await db.execute(select(Model).where(Model.path == model_path))
@@ -569,26 +570,44 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
 
-                # loop = asyncio.get_running_loop()
-                # try:
-                #     # Run model and tokenizer download sequentially
-                #     await loop.run_in_executor(
-                #         None,
-                #         lambda: AutoModel.from_pretrained(
-                #             model_id, cache_dir=model_path, trust_remote_code=True,torch_dtype="auto")
-                #     )
-                #     await loop.run_in_executor(None, lambda: AutoTokenizer.from_pretrained(model_id, cache_dir=model_path))
-                # except Exception as e:
-                #     error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
-                #     print(error_msg)
-                #     traceback.print_exc()
-                #     await sio.emit("error", {"sid": sid, "message": error_msg})
-                #     return None
+                loop = asyncio.get_running_loop()
+                try:
+                     # Asynchronously download model
+                    await loop.run_in_executor(None, lambda: snapshot_download(
+                        repo_id=model_id,
+                        cache_dir=cache_path,
+                        allow_patterns=["*.bin", "*.json", "*.txt", "*.model"]
+                    ))
+
+                    msg = f"✅ Model {model_id} successfully cached."
+                    print(msg)
+                    await sio.emit("status", {"sid": sid, "message": msg})
+
+                    # # Load model and tokenizer asynchronously
+                    # model = await loop.run_in_executor(None, lambda: AutoModel.from_pretrained(
+                    #     model_path, trust_remote_code=True, torch_dtype="auto"
+                    # ))
+
+                    # tokenizer = await loop.run_in_executor(None, lambda: AutoTokenizer.from_pretrained(model_path))
+
+                except Exception as e:
+                    error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
+                    print(error_msg)
+                    traceback.print_exc()
+                    await sio.emit("error", {"sid": sid, "message": error_msg})
+                    return None
 
                 msg = f"🎯 Model successfully cached at: {model_path}"
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
 
+
+            # Ensure the model_path exists before listing files
+            if not os.path.exists(model_path):
+                error_msg = f"❌ Model path does not exist: {model_path}"
+                print(error_msg)
+                await sio.emit("error", {"sid": sid, "message": error_msg})
+                return None
             # Get model size
             total_size = sum(
                 os.path.getsize(os.path.join(model_path, f))
