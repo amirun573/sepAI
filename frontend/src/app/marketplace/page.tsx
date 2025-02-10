@@ -63,7 +63,7 @@ const MarketPlace: React.FC = () => {
 
         socket.on("progress", (data) => {
             console.log("🚀 Received Progress Update:", data);
-            setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
+            // setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
         });
 
         socket.on("status", (data) => {
@@ -74,6 +74,7 @@ const MarketPlace: React.FC = () => {
         socket.on("completed", (data) => {
             console.log("🎉 Model Downloaded:", data);
             alert(`🎉 Model ${data.model_id} downloaded successfully!`);
+            location.reload();
         });
 
         socket.on("download_error", (data) => {
@@ -205,19 +206,8 @@ const MarketPlace: React.FC = () => {
         if (!confirmDelete) return; // If user cancels, exit function
 
         try {
-            const response = await API({
-                url: 'models/delete',
-                API_Code: APICode.delete_model
-            });
+            socket.emit("delete_model", { model_id: modelId });
 
-            if (!response.success) {
-                throw new Error(`Failed to delete model: ${modelId}`);
-            }
-
-            console.log(`Model ${modelId} deleted successfully`);
-
-            // Optionally, refresh the list or update state
-            setModelLists(prev => prev.filter(model => model.modelId !== modelId));
 
         } catch (error) {
             console.error("Error deleting model:", error);

@@ -3,13 +3,14 @@ import sys
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # Add the app's root directory to sys.path so that imports work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Import database engine and Base
-from database import engine, Base  # Import your database setup
+from database import DATABASE_URL, engine, Base  # Import your database setup
 
 # This is the Alembic Config object, which provides access to the .ini file
 config = context.config
@@ -35,12 +36,18 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode with a live database connection."""
-    with engine.connect() as connection:
+# Create a **sync** database engine for Alembic
+SYNC_DATABASE_URL = DATABASE_URL.replace("sqlite+aiosqlite:///", "sqlite:///")  # Change async SQLite to sync SQLite
+sync_engine = create_engine(SYNC_DATABASE_URL)
+
+def run_migrations_online():
+    """Run migrations in 'online' mode."""
+    connectable = sync_engine  # Use the **sync** engine here
+
+    with connectable.connect() as connection:
         context.configure(
-            connection=connection, 
-            target_metadata=target_metadata
+            connection=connection,
+            target_metadata=Base.metadata,
         )
 
         with context.begin_transaction():

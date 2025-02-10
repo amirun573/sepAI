@@ -13,3 +13,10 @@ class LinuxHandler(OSHandler):
         model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
         return str(model_path)
+
+    def get_cache_model_path(self) -> str:
+        base_path = Path.home() / f".{self.app_name.lower()}"
+        model_path = base_path / "cache" / "model"
+        model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
+
+        return str(model_path)

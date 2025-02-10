@@ -23,20 +23,30 @@ async def Get_Settings():
             # ✅ Correct way to fetch data
             result = await db.execute(select(Setting))
             settings = result.scalars().first()  # ✅ Extract the first result
-
+            model_path = factory_OS.get_os_handler().get_model_path()
+            cache_model_path = factory_OS.get_os_handler().get_cache_model_path()
             # If settings are not found, return a default response
             if not settings:
-                model_path = factory_OS.get_os_handler().get_model_path()
+                
                 return {
                     "modelDownloadPath": model_path,
                     "notification": False,
                     "log": False,
+                    "cacheModelDownloadPath": cache_model_path,
+
                 }
+            if settings.path_store_name_main is not None:
+                model_path = settings.path_store_name_main
+
+            if settings.path_store_cache_model_main is not None:
+                cache_model_path = settings.path_store_cache_model_main
 
             return {
-                "modelDownloadPath": settings.path_store_name_main,
+                "modelDownloadPath": model_path,
                 "notification": settings.notification_enable,
                 "log": settings.log_enable,
+                "cacheModelDownloadPath": cache_model_path,
+
             }
 
         except SQLAlchemyError as e:

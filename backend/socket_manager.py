@@ -1,6 +1,6 @@
 
 
-from app.models.model.model import download_model_in_background
+from app.models.model.model import download_model_in_background, Delete_Model
 import socketio
 import asyncio
 
@@ -17,7 +17,13 @@ async def disconnect(sid):
 @sio.event
 async def start_download(sid, data):
     model_id = data.get("model_id")
-    model_path = f"models/{model_id}"  # 🔹 Ensure the model directory exists
 
     print(f"📥 Starting download for {model_id}")
     asyncio.create_task(download_model_in_background(sid, model_id, sio))
+
+@sio.event
+async def delete_model(sid, data):
+    model_id = data.get("model_id")
+
+    print(f"📥  Deleting Model for {model_id}")
+    asyncio.create_task(Delete_Model(sid, model_id, sio))

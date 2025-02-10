@@ -9,9 +9,18 @@ from pathlib import Path
 class MacOSHandler(OSHandler):
     def get_appdata_path(self) -> str:
         return os.path.expanduser(f"~/Library/{self.app_name}")
+    
+    def get_appdata_path(self) -> str:
+        return os.path.expanduser(f"~/Library/{self.app_name}")
+        
     def get_model_path(self) -> str:
         base_path = Path.home() / "Library" / self.app_name
         model_path = base_path / "model"
+        model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
+
+    def get_cache_model_path(self) -> str:
+        base_path = Path.home() / "Library" / self.app_name
+        model_path = base_path / "cache" / "model"
         model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
         return str(model_path)
