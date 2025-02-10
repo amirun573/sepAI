@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import shutil
 import functools
 import concurrent.futures
+import traceback
 
 
 progress_status: Dict[str, float] = {}
@@ -476,36 +477,145 @@ async def Delete_Model(sid, model_id, sio):
             await sio.emit("error", {"model_id": model_id, "message": str(e)}, to=sid)
 
 
-async def load_transformer_model(model_id: str, save_path: str = "./models"):
+async def load_transformer_model(model_id: str):
     """
-    Load a transformer model from Hugging Face, avoiding re-downloads if possible.
+    Load a transformer model from Hugging Face, using a custom cache path from settings.
 
+    :param session: AsyncSession to fetch settings from the database
     :param model_id: Hugging Face model ID (e.g., "PramaLLC/BEN2")
-    :param save_path: Local directory to store the model
     :return: Loaded model and tokenizer
     """
-    model_path = os.path.join(save_path, model_id.replace("/", "_"))
+    async with async_session_maker() as db:  # ✅ Ensure it's an instance, not a callable
+        # Retrieve settings from the database
+        result = await db.execute(select(Setting.path_store_cache_model_main))
+        cache_path = result.scalar_one_or_none()  # Get stored path or None
 
-    # Ensure the directory exists
-    os.makedirs(model_path, exist_ok=True)
+        # Default to "./models" if not set in DB
+        save_path = cache_path if cache_path else "./models"
+        model_path = os.path.join(save_path, model_id.replace("/", "_"))
 
-    # Check if model exists locally
-    model_files = ["config.json", "pytorch_model.bin", "tokenizer.json"]
-    is_downloaded = all(os.path.exists(os.path.join(model_path, f))
-                        for f in model_files)
+        # Ensure the directory exists
+        os.makedirs(model_path, exist_ok=True)
 
-    if is_downloaded:
-        print(f"✅ Using cached model from {model_path}")
-        local_files_only = True
-    else:
-        print(f"📥 Downloading model {model_id} from Hugging Face...")
-        local_files_only = False
+        # Check if model exists locally
+        model_files = ["config.json", "pytorch_model.bin", "tokenizer.json"]
+        is_downloaded = all(os.path.exists(os.path.join(model_path, f))
+                            for f in model_files)
 
-    # Load model and tokenizer (download only if needed)
-    model = AutoModel.from_pretrained(model_path if is_downloaded else model_id,
-                                      cache_dir=save_path, local_files_only=local_files_only)
-    tokenizer = AutoTokenizer.from_pretrained(model_path if is_downloaded else model_id,
-                                              cache_dir=save_path, local_files_only=local_files_only)
+        if is_downloaded:
+            print(f"✅ Using cached model from {model_path}")
+            local_files_only = True
+        else:
+            print(f"📥 Downloading model {model_id} from Hugging Face...")
+            local_files_only = False
 
-    print(f"🎯 Model ready: {model_id}")
-    return model, tokenizer
+        # Load model and tokenizer
+        model = AutoModel.from_pretrained(model_path if is_downloaded else model_id,
+                                          cache_dir=save_path, local_files_only=local_files_only)
+        tokenizer = AutoTokenizer.from_pretrained(model_path if is_downloaded else model_id,
+                                                  cache_dir=save_path, local_files_only=local_files_only)
+
+        print(f"🎯 Model ready: {model_id}")
+        return model, tokenizer
+
+
+async def download_model_to_cache(sid, model_id: str, sio):
+    """
+    Download a transformer model to a cached location specified in the database
+    and store its metadata in the `models` table.
+
+    :param sid: Socket.IO session ID for updates
+    :param model_id: Hugging Face model ID (e.g., "PramaLLC/BEN2")
+    :param sio: Socket.IO instance for real-time updates
+    :return: Path where the model is stored
+    """
+    try:
+        async with async_session_maker() as db:
+            # Fetch cache path from settings
+            result = await db.execute(select(Setting.path_store_cache_model_main))
+            cache_path = result.scalar_one_or_none()
+
+            if not cache_path:
+                error_msg = "❌ No cache path found in settings."
+                print(error_msg)
+                await sio.emit("error", {"sid": sid, "message": error_msg})
+                return None
+
+            # Hugging Face stores models as "model--{model_id}" inside cache
+            model_path = os.path.join(cache_path, model_id.replace(
+                '/', '--'))  # No "model--" prefix
+
+            # model_path = os.path.join(cache_path, model_folder_name)
+            os.makedirs(model_path, exist_ok=True)
+
+            # Check if model already exists in DB
+            existing_model = await db.execute(select(Model).where(Model.path == model_path))
+            existing_model = existing_model.scalars().first()
+
+            if existing_model:
+                msg = f"✅ Model {model_id} already stored in DB at: {model_path}"
+                print(msg)
+                await sio.emit("status", {"sid": sid, "message": msg})
+                return model_path
+
+            # Check if model is already cached
+            model_files = ["config.json",
+                           "pytorch_model.bin", "tokenizer.json"]
+            is_downloaded = all(os.path.exists(
+                os.path.join(model_path, f)) for f in model_files)
+
+            if not is_downloaded:
+                msg = f"📥 Downloading model {model_id} to cache..."
+                print(msg)
+                await sio.emit("status", {"sid": sid, "message": msg})
+
+                # loop = asyncio.get_running_loop()
+                # try:
+                #     # Run model and tokenizer download sequentially
+                #     await loop.run_in_executor(
+                #         None,
+                #         lambda: AutoModel.from_pretrained(
+                #             model_id, cache_dir=model_path, trust_remote_code=True,torch_dtype="auto")
+                #     )
+                #     await loop.run_in_executor(None, lambda: AutoTokenizer.from_pretrained(model_id, cache_dir=model_path))
+                # except Exception as e:
+                #     error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
+                #     print(error_msg)
+                #     traceback.print_exc()
+                #     await sio.emit("error", {"sid": sid, "message": error_msg})
+                #     return None
+
+                msg = f"🎯 Model successfully cached at: {model_path}"
+                print(msg)
+                await sio.emit("status", {"sid": sid, "message": msg})
+
+            # Get model size
+            total_size = sum(
+                os.path.getsize(os.path.join(model_path, f))
+                for f in os.listdir(model_path)
+                if os.path.isfile(os.path.join(model_path, f))
+            )
+            size_storage = convert_storage_unit(total_size)
+
+            # Store metadata in DB
+            new_model = Model(
+                model_name=model_id,
+                path=model_path,
+                size=round(size_storage.size, 2),
+                unit=size_storage.unit
+            )
+            db.add(new_model)
+            await db.commit()
+
+            msg = f"✅ Model {model_id} stored in the database."
+            print(msg)
+            await sio.emit("status", {"sid": sid, "message": msg})
+
+            return model_path
+
+    except Exception as e:
+        error_msg = f"❌ An error occurred: {str(e)}"
+        print(error_msg)
+        traceback.print_exc()
+        await sio.emit("error", {"sid": sid, "message": error_msg})
+        return None

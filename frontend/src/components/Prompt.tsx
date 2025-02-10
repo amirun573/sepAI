@@ -45,7 +45,8 @@ const Prompt = () => {
                                 <path fill="currentColor" d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z" className="opacity-75" />
                             </svg>
                         ) : 'Submit'}
-                    </button>                </div>
+                    </button>
+                </div>
             </div>
 
 

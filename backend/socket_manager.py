@@ -1,6 +1,6 @@
 
 
-from app.models.model.model import download_model_in_background, Delete_Model
+from app.models.model.model import download_model_in_background, Delete_Model, download_model_to_cache
 import socketio
 import asyncio
 
@@ -19,7 +19,9 @@ async def start_download(sid, data):
     model_id = data.get("model_id")
 
     print(f"📥 Starting download for {model_id}")
-    asyncio.create_task(download_model_in_background(sid, model_id, sio))
+    asyncio.create_task(download_model_to_cache(sid, model_id, sio))
+    
+
 
 @sio.event
 async def delete_model(sid, data):
