@@ -619,3 +619,45 @@ async def download_model_to_cache(sid, model_id: str, sio):
         traceback.print_exc()
         await sio.emit("error", {"sid": sid, "message": error_msg})
         return None
+
+
+async def load_model_from_db(model_id: str):
+    """
+    Fetches the model path from the Models table and loads the model.
+
+    :param model_id: The model name (e.g., "PramaLLC/BEN2") stored in the database.
+    :return: Loaded AutoModel instance or None if loading fails.
+    """
+    try:
+        async with async_session_maker() as db:
+            # Fetch model path from database
+
+            print("mode_id-->", model_id)
+            result = await db.execute(select(Model).where(Model.model_name == model_id))
+            model_entry = result.scalars().first()
+
+            if not model_entry:
+                print(f"❌ Model {model_id} not found in the database.")
+                return None
+
+            model_path = model_entry.path
+            print(f"📂 Loading model from: {model_path}")
+
+            # Load the model
+            loop = asyncio.get_running_loop()
+            model = await loop.run_in_executor(
+                None, lambda: AutoModel.from_pretrained(
+                    model_path, trust_remote_code=True, torch_dtype="auto")
+            )
+
+            # Load tokenizer (optional)
+            tokenizer = await loop.run_in_executor(
+                None, lambda: AutoTokenizer.from_pretrained(model_path)
+            )
+
+            print(f"✅ Successfully loaded model: {model_id}")
+            return model, tokenizer
+
+    except Exception as e:
+        print(f"❌ Error loading model {model_id}: {str(e)}")
+        return None

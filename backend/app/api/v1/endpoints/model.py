@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, WebSocket, Query
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
-from app.models.model.model import model_size, Get_Model_Downloaded
+from app.models.model.model import model_size, Get_Model_Downloaded, load_model_from_db
 
 
 class ModelController:
@@ -24,6 +24,13 @@ class ModelController:
     async def get_models():
         return await Get_Model_Downloaded()  # Pass as an object
 
+    @router.get("/load_model")
+    async def download_model(model_id: str = Query(..., description="The ID of the model")):
+            # Pass as an object
+            saved_model = await load_model_from_db(model_id)
 
+            print("saved_model-->",saved_model)
+
+            return
 model_controller = ModelController()
 router = model_controller.router
