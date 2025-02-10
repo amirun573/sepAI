@@ -154,6 +154,30 @@ function Setting() {
         }
     }
 
+    const updateCachePathDownloadModel = async () => {
+        setIsLoadingSaveModelPathDownload(true);
+        try {
+            const requestSetting = await API({
+                url: `settings/cacheModelDownloadPath`,
+                API_Code: APICode.update_model_path_setting,
+                data: {
+                    cacheModelDownloadPath: settings.cacheModelDownloadPath
+                }
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
+        } catch (error: any) {
+            alert(error?.message);
+        } finally {
+            setIsLoadingSaveModelPathDownload(false);
+
+        }
+    }
+
     useEffect(() => {
         try {
             setSettings({ ...settings, ["notification"]: toggleNotificationState });
@@ -211,7 +235,7 @@ function Setting() {
 
                     />
                     <div className="justify-end mt-4">
-                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" onClick={updatePathDownloadModel}>
+                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" onClick={updateCachePathDownloadModel}>
                             Save
                         </button>
                     </div>

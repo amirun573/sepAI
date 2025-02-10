@@ -99,6 +99,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.update_cahce_model_path_setting: {
+        const cacheModelPathSetting = await axios.patch(fullURL, data);
+
+        if (!cacheModelPathSetting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: cacheModelPathSetting.status,
+          data: cacheModelPathSetting.data,
+        };
+
+        break;
+      }
+
       case APICode.update_model_notification_setting: {
         const notificationSetting = await axios.patch(fullURL, data);
 
