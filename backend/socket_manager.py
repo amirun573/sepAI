@@ -5,7 +5,6 @@ import socketio
 import asyncio
 
 sio = socketio.AsyncServer(cors_allowed_origins="*", async_mode="asgi")
-
 @sio.event
 async def connect(sid, environ):
     print(f"✅ Client {sid} connected.")
@@ -19,6 +18,7 @@ async def start_download(sid, data):
     model_id = data.get("model_id")
 
     print(f"📥 Starting download for {model_id}")
+
     asyncio.create_task(download_model_to_cache(sid, model_id, sio))
     
 

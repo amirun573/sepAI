@@ -6,7 +6,7 @@ from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
 import os
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig
 import asyncio
 from tqdm import tqdm
 import time
@@ -21,7 +21,10 @@ import shutil
 import functools
 import concurrent.futures
 import traceback
-
+import torch
+from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
+import huggingface_hub
+import glob
 
 progress_status: Dict[str, float] = {}
 # Create a Socket.IO server
@@ -34,6 +37,7 @@ executor = concurrent.futures.ThreadPoolExecutor(
 
 # Initialize the API
 api = HfApi()
+huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
 
 # Async function to handle the download in the background
@@ -576,7 +580,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                     await loop.run_in_executor(None, lambda: snapshot_download(
                         repo_id=model_id,
                         cache_dir=cache_path,
-                        allow_patterns=["*.bin", "*.json", "*.txt", "*.model"]
+                        allow_patterns=["*.bin", "*.json", "*.txt", "*.model"],
                     ))
 
                     msg = f"✅ Model {model_id} successfully cached."
@@ -593,7 +597,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 except Exception as e:
                     error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
                     print(error_msg)
-                    traceback.print_exc()
+                    traceback.print_exc() 
                     await sio.emit("error", {"sid": sid, "message": error_msg})
                     return None
 
@@ -638,6 +642,22 @@ async def download_model_to_cache(sid, model_id: str, sio):
         traceback.print_exc()
         await sio.emit("error", {"sid": sid, "message": error_msg})
         return None
+def get_snapshot_path(base_dir):
+    # Construct the path to the snapshots directory
+    snapshots_dir = os.path.join(base_dir, "snapshots")
+    
+    # Use glob to list all directories in the snapshots directory
+    snapshot_folders = [d for d in glob.glob(os.path.join(snapshots_dir, "*")) if os.path.isdir(d)]
+    
+    if not snapshot_folders:
+        raise ValueError(f"No snapshot folder found in {snapshots_dir}.")
+    
+    # If there are multiple snapshots, you can choose one based on your criteria.
+    # Here we sort by modification time (latest first).
+    snapshot_folders.sort(key=os.path.getmtime, reverse=True)
+    
+    # Return the first snapshot folder (most recent)
+    return snapshot_folders[0]
 
 
 async def load_model_from_db(model_id: str):
@@ -659,23 +679,48 @@ async def load_model_from_db(model_id: str):
                 print(f"❌ Model {model_id} not found in the database.")
                 return None
 
-            model_path = model_entry.path
+            base_dir = model_entry.path
+            model_path = get_snapshot_path(base_dir)
+
             print(f"📂 Loading model from: {model_path}")
+            # Register the custom model
+            AutoConfig.register("multi_modality", MultiModalityConfig)
+            AutoModel.register(MultiModalityConfig, MultiModalityModel)
 
             # Load the model
-            loop = asyncio.get_running_loop()
-            model = await loop.run_in_executor(
-                None, lambda: AutoModel.from_pretrained(
-                    model_path, trust_remote_code=True, torch_dtype="auto")
-            )
+            model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
 
-            # Load tokenizer (optional)
-            tokenizer = await loop.run_in_executor(
-                None, lambda: AutoTokenizer.from_pretrained(model_path)
-            )
+            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            # Sample input text
+            text = "Hello, how are you today?"
+            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+            print("Tokenized inputs:", inputs)
+
+            # Run the model in inference mode (disables gradient calculation)
+            with torch.no_grad():
+                outputs = model(**inputs)
+
+            print("Model outputs:", outputs)
+
+            # # Load the model
+            # loop = asyncio.get_running_loop()
+
+            # # Load the model
+            # model = AutoModel.from_pretrained(
+            #     model_path,  # Load from the specific directory
+            #     # torch_dtype=torch.float16,  # Specify the dtype for the model
+            #     # device_map="auto",  # Automatically map the model to available devices
+            #     # low_cpu_mem_usage=True,  # Optimize memory usage
+            #     trust_remote_code=True
+
+            # )
+
+            # # Load the tokenizer
+            # tokenizer = AutoTokenizer.from_pretrained(model_path)  # Load from the specific directory
+
 
             print(f"✅ Successfully loaded model: {model_id}")
-            return model, tokenizer
+            return "sdsdsds"
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
