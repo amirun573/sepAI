@@ -6,7 +6,7 @@ from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
 import os
-from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig
+from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM
 import asyncio
 from tqdm import tqdm
 import time
@@ -670,8 +670,7 @@ async def load_model_from_db(model_id: str):
     try:
         async with async_session_maker() as db:
             # Fetch model path from database
-
-            print("mode_id-->", model_id)
+            print("model_id-->", model_id)
             result = await db.execute(select(Model).where(Model.model_name == model_id))
             model_entry = result.scalars().first()
 
@@ -683,44 +682,39 @@ async def load_model_from_db(model_id: str):
             model_path = get_snapshot_path(base_dir)
 
             print(f"📂 Loading model from: {model_path}")
+
             # Register the custom model
             AutoConfig.register("multi_modality", MultiModalityConfig)
             AutoModel.register(MultiModalityConfig, MultiModalityModel)
 
-            # Load the model
+            # Load the model and tokenizer
             model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
+            tokenizer = AutoTokenizer.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                legacy=False  # Force the new behavior
+            )
 
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-            # Sample input text
             text = "Hello, how are you today?"
+
             inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
             print("Tokenized inputs:", inputs)
 
-            # Run the model in inference mode (disables gradient calculation)
+            # Run the model forward pass to get outputs
             with torch.no_grad():
-                outputs = model(**inputs)
+                generated_ids = model.generate(
+                    inputs["input_ids"],
+                    max_length=50,      # Total tokens in output (including input)
+                    do_sample=True,     # Use sampling instead of greedy decoding
+                    top_k=50,
+                    top_p=0.95
+    )
 
-            print("Model outputs:", outputs)
-
-            # # Load the model
-            # loop = asyncio.get_running_loop()
-
-            # # Load the model
-            # model = AutoModel.from_pretrained(
-            #     model_path,  # Load from the specific directory
-            #     # torch_dtype=torch.float16,  # Specify the dtype for the model
-            #     # device_map="auto",  # Automatically map the model to available devices
-            #     # low_cpu_mem_usage=True,  # Optimize memory usage
-            #     trust_remote_code=True
-
-            # )
-
-            # # Load the tokenizer
-            # tokenizer = AutoTokenizer.from_pretrained(model_path)  # Load from the specific directory
-
+            generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+            print("Generated text:", generated_text)
 
             print(f"✅ Successfully loaded model: {model_id}")
-            return "sdsdsds"
+            return model, tokenizer
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
