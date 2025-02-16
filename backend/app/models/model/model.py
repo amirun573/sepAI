@@ -580,7 +580,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                     await loop.run_in_executor(None, lambda: snapshot_download(
                         repo_id=model_id,
                         cache_dir=cache_path,
-                        allow_patterns=["*.bin", "*.json", "*.txt", "*.model"],
+                        allow_patterns=["*"]  # Download everything
                     ))
 
                     msg = f"✅ Model {model_id} successfully cached."
@@ -682,36 +682,42 @@ async def load_model_from_db(model_id: str):
             model_path = get_snapshot_path(base_dir)
 
             print(f"📂 Loading model from: {model_path}")
-
+            config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            print("Check Model Type",config.model_type)  # Check what type of model this is
             # Register the custom model
             AutoConfig.register("multi_modality", MultiModalityConfig)
             AutoModel.register(MultiModalityConfig, MultiModalityModel)
 
             # Load the model and tokenizer
-            model = AutoModel.from_pretrained(model_path, trust_remote_code=True)
-            tokenizer = AutoTokenizer.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                legacy=False  # Force the new behavior
-            )
+            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
 
             text = "Hello, how are you today?"
 
-            inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+            inputs = tokenizer(text, return_tensors="pt")
             print("Tokenized inputs:", inputs)
 
             # Run the model forward pass to get outputs
-            with torch.no_grad():
-                generated_ids = model.generate(
-                    inputs["input_ids"],
-                    max_length=50,      # Total tokens in output (including input)
-                    do_sample=True,     # Use sampling instead of greedy decoding
-                    top_k=50,
-                    top_p=0.95
-    )
+            # if hasattr(model, "generate"):
+            #     generated_ids = model.generate(
+            #         inputs["input_ids"],
+            #         max_length=50,
+            #         do_sample=True,
+            #         top_k=50,
+            #         top_p=0.95
+            #     )
+            #     generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+            #     print("Generated text:", generated_text)
+            # else:
+            #     print("🚨 The loaded model does not support text generation.")
 
-            generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-            print("Generated text:", generated_text)
+            # Generate text
+            with torch.no_grad():
+                output_ids = model.generate(inputs["input_ids"], max_length=50)
+                
+            generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
+            print("Generated Text:", generated_text)
+
 
             print(f"✅ Successfully loaded model: {model_id}")
             return model, tokenizer
