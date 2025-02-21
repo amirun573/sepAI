@@ -6,7 +6,7 @@ from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
 import os
-from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM
+from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM, pipeline
 import asyncio
 from tqdm import tqdm
 import time
@@ -692,10 +692,7 @@ async def load_model_from_db(model_id: str):
             tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
 
-            text = "Hello, how are you today?"
-
-            inputs = tokenizer(text, return_tensors="pt")
-            print("Tokenized inputs:", inputs)
+            
 
             # Run the model forward pass to get outputs
             # if hasattr(model, "generate"):
@@ -712,12 +709,14 @@ async def load_model_from_db(model_id: str):
             #     print("🚨 The loaded model does not support text generation.")
 
             # Generate text
-            with torch.no_grad():
-                output_ids = model.generate(inputs["input_ids"], max_length=50)
+            # with torch.no_grad():
+            #     output_ids = model.generate(inputs["input_ids"], max_length=50)
                 
-            generated_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-            print("Generated Text:", generated_text)
+            text_generator = pipeline("text-generation", model=model_path, trust_remote_code=False)
+            text = "Hello, how are you today?"
 
+            generated_text = text_generator(text, max_length=50, do_sample=True, top_k=50, top_p=0.95)
+            print("Tokenized inputs:", generated_text[0]["generated_text"])
 
             print(f"✅ Successfully loaded model: {model_id}")
             return model, tokenizer
