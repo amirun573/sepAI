@@ -661,16 +661,9 @@ def get_snapshot_path(base_dir):
 
 
 async def load_model_from_db(model_id: str):
-    """
-    Fetches the model path from the Models table and loads the model.
-
-    :param model_id: The model name (e.g., "PramaLLC/BEN2") stored in the database.
-    :return: Loaded AutoModel instance or None if loading fails.
-    """
     try:
         async with async_session_maker() as db:
-            # Fetch model path from database
-            print("model_id-->", model_id)
+            print("model_id -->", model_id)
             result = await db.execute(select(Model).where(Model.model_name == model_id))
             model_entry = result.scalars().first()
 
@@ -678,49 +671,29 @@ async def load_model_from_db(model_id: str):
                 print(f"❌ Model {model_id} not found in the database.")
                 return None
 
-            base_dir = model_entry.path
-            model_path = get_snapshot_path(base_dir)
-
+            model_path = get_snapshot_path(model_entry.path)
             print(f"📂 Loading model from: {model_path}")
-            config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-            print("Check Model Type",config.model_type)  # Check what type of model this is
-            # Register the custom model
-            AutoConfig.register("multi_modality", MultiModalityConfig)
-            AutoModel.register(MultiModalityConfig, MultiModalityModel)
 
-            # Load the model and tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
-            model = AutoModelForCausalLM.from_pretrained(model_path, trust_remote_code=True)
+            # Use MPS if available, otherwise fallback to CPU
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-            
+            text_generator = pipeline(
+                "text-generation",
+                model=model_path,
+                trust_remote_code=True,
+                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
+                torch_dtype=torch.float16 if device == "mps" else "auto"
+            )
 
-            # Run the model forward pass to get outputs
-            # if hasattr(model, "generate"):
-            #     generated_ids = model.generate(
-            #         inputs["input_ids"],
-            #         max_length=50,
-            #         do_sample=True,
-            #         top_k=50,
-            #         top_p=0.95
-            #     )
-            #     generated_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
-            #     print("Generated text:", generated_text)
-            # else:
-            #     print("🚨 The loaded model does not support text generation.")
-
-            # Generate text
-            # with torch.no_grad():
-            #     output_ids = model.generate(inputs["input_ids"], max_length=50)
-                
-            text_generator = pipeline("text-generation", model=model_path, trust_remote_code=False)
             text = "Hello, how are you today?"
+            generated_text = text_generator(text, max_length=50, do_sample=True, top_k=50, top_p=0.95, truncation=True)
 
-            generated_text = text_generator(text, max_length=50, do_sample=True, top_k=50, top_p=0.95)
-            print("Tokenized inputs:", generated_text[0]["generated_text"])
+            print("Generated Text:", generated_text[0]["generated_text"])
+            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
 
-            print(f"✅ Successfully loaded model: {model_id}")
-            return model, tokenizer
+            return text_generator
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
+    
