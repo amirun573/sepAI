@@ -25,6 +25,7 @@ import torch
 from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
 import huggingface_hub
 import glob
+import re
 
 progress_status: Dict[str, float] = {}
 # Create a Socket.IO server
@@ -660,7 +661,7 @@ def get_snapshot_path(base_dir):
     return snapshot_folders[0]
 
 
-async def load_model_from_db(model_id: str):
+async def load_model_from_db(model_id: str,prompt: str):
     try:
         async with async_session_maker() as db:
             print("model_id -->", model_id)
@@ -685,10 +686,10 @@ async def load_model_from_db(model_id: str):
                 torch_dtype=torch.float16 if device == "mps" else "auto"
             )
 
-            text = "Hello, how are you today?"
-            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95)
+            text = prompt
+            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
 
-            output_text = (generated_text[0]["generated_text"]).replace("\n", " ")
+            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
             print("output_text==>",output_text)
 
             print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
