@@ -686,12 +686,14 @@ async def load_model_from_db(model_id: str):
             )
 
             text = "Hello, how are you today?"
-            generated_text = text_generator(text, max_length=50, do_sample=True, top_k=50, top_p=0.95, truncation=True)
+            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95)
 
-            print("Generated Text:", generated_text[0]["generated_text"])
+            output_text = (generated_text[0]["generated_text"]).replace("\n", " ")
+            print("output_text==>",output_text)
+
             print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
 
-            return text_generator
+            return output_text
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")

@@ -27,10 +27,10 @@ class ModelController:
     @router.get("/load_model")
     async def download_model(model_id: str = Query(..., description="The ID of the model")):
             # Pass as an object
-            saved_model = await load_model_from_db(model_id)
+            prompt_answer = await load_model_from_db(model_id)
 
-            print("saved_model-->",saved_model)
+            # print("saved_model-->",saved_model)
 
-            return
+            return prompt_answer
 model_controller = ModelController()
 router = model_controller.router
