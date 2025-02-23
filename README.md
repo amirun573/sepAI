@@ -12,7 +12,7 @@ Prerequisites
 1. `cd backend`
 2. `virtualenv venv`
 3. `source venv/bin/activate`
-4.  `uvicorn main:app --reload`
+4.  `uvicorn main:app --reload`/ `venv/bin/python -m uvicorn main:app --reload`
 
 For Alambic migration. Can run
 1. `alembic revision --autogenerate -m "{message}"`

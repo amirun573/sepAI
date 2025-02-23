@@ -5,13 +5,23 @@ import subprocess
 from app.models.schemas.device import DeviceGPUDetails
 from .os import OSHandler 
 from pathlib import Path
+import torch
 
 class MacOSHandler(OSHandler):
     def get_appdata_path(self) -> str:
         return os.path.expanduser(f"~/Library/{self.app_name}")
+    
+    def get_appdata_path(self) -> str:
+        return os.path.expanduser(f"~/Library/{self.app_name}")
+        
     def get_model_path(self) -> str:
         base_path = Path.home() / "Library" / self.app_name
         model_path = base_path / "model"
+        model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
+
+    def get_cache_model_path(self) -> str:
+        base_path = Path.home() / "Library" / self.app_name
+        model_path = base_path / "cache" / "model"
         model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
         return str(model_path)
@@ -96,5 +106,31 @@ class MacOSHandler(OSHandler):
                 load_percent=0.0,
                 temperature_C=0.0
             )
+
+    def check_pytorch_device():
+        """
+        Checks if PyTorch can use MPS (Metal Performance Shaders) on Mac 
+        and prints available devices.
+        """
+        mps_available = torch.backends.mps.is_available()
+        cuda_available = torch.cuda.is_available()
+        device = "mps" if mps_available else ("cuda" if cuda_available else "cpu")
+
+        print(f"✅ PyTorch Version: {torch.__version__}")
+        print(f"🖥️  Selected Device: {device}")
+        print(f"🎯 MPS Available: {mps_available}")
+        print(f"🚀 CUDA Available: {cuda_available}")
+
+        if mps_available:
+            print("🔥 MPS is enabled. Running on Apple Silicon GPU!")
+        elif cuda_available:
+            print("⚡ CUDA is enabled. Running on NVIDIA GPU!")
+        else:
+            print("⚠️ No GPU detected. Running on CPU.")
+
+        return torch.device(device)
+
+    # Run the function
+    # device = check_pytorch_device()
 
 

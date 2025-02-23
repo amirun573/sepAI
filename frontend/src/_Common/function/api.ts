@@ -99,6 +99,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.update_cahce_model_path_setting: {
+        const cacheModelPathSetting = await axios.patch(fullURL, data);
+
+        if (!cacheModelPathSetting) {
+          throw new Error("Not Getting Any Data");
+        }
+
+        response = {
+          success: true,
+          status: cacheModelPathSetting.status,
+          data: cacheModelPathSetting.data,
+        };
+
+        break;
+      }
+
       case APICode.update_model_notification_setting: {
         const notificationSetting = await axios.patch(fullURL, data);
 
@@ -110,6 +126,38 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
           success: true,
           status: notificationSetting.status,
           data: notificationSetting.data,
+        };
+
+        break;
+      }
+
+      case APICode.model_lists: {
+        const modelLists = await axios.get(fullURL);
+
+        if (!modelLists) {
+          throw new Error("Not Getting Any Models");
+        }
+
+        response = {
+          success: true,
+          status: modelLists.status,
+          data: modelLists.data,
+        };
+
+        break;
+      }
+
+      case APICode.prompt: {
+        const modelLists = await axios.post(fullURL, data);
+
+        if (!modelLists) {
+          throw new Error("Not Getting Any Models");
+        }
+
+        response = {
+          success: true,
+          status: modelLists.status,
+          data: modelLists.data,
         };
 
         break;

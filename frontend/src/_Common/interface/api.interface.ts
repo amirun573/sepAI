@@ -27,9 +27,26 @@ export interface APIHuggingFaceModeListsResponse {
   trendingScore: number;
   _id: string;
   size?: APIHuggingFaceModeSizeResponse;
+  downloaded?: boolean;
 }
 
 export interface APIHuggingFaceModeSizeResponse {
+  size: number;
+  unit: Unit;
+}
+
+export interface APIGetSaveModelLists {
+  model_id: number;
+  model_name: string;
+  path: string;
+  size: number;
+  unit: Unit;
+}
+
+export interface APIModelListsResponse {
+  model_id: number;
+  model_name: string;
+  path: string;
   size: number;
   unit: Unit;
 }

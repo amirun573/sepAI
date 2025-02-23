@@ -12,3 +12,9 @@ class WindowsHandler(OSHandler):
         model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
         return str(model_path)
+    def get_cache_model_path(self) -> str:
+            base_path = Path(os.getenv("APPDATA", Path.home() / "AppData/Roaming")) / self.app_name
+            model_path = base_path / "cache" /"model"
+            model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
+
+            return str(model_path)

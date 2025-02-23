@@ -7,7 +7,7 @@ import useSWR from "swr";
 import API from "@/_Common/function/api";
 import { APICode } from "@/_Common/enum/api-code.enum";
 import { io } from "socket.io-client";
-import { APIHuggingFaceModeListsResponse, APIHuggingFaceModeSizeResponse } from "@/_Common/interface/api.interface";
+import { APIGetSaveModelLists, APIHuggingFaceModeListsResponse, APIHuggingFaceModeSizeResponse } from "@/_Common/interface/api.interface";
 import { Unit } from "@/_Common/enum/unit.enum";
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 const socket = io("http://127.0.0.1:8000", {
@@ -31,7 +31,25 @@ const MarketPlace: React.FC = () => {
         size: 0,
         unit: Unit.GB
     });
+    const [saveListsModel, setSaveListsModel] = useState<APIGetSaveModelLists[]>([]);
 
+
+    const getModelDownload = async () => {
+        try {
+            const requestModels = await API({
+                url: 'models/',
+                API_Code: APICode.model_lists
+            });
+
+            if (!requestModels.success) {
+                throw Error("Failed To Load Model");
+            }
+
+            setSaveListsModel(requestModels.data?.models as APIGetSaveModelLists[]);
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
     const handleLoadMore = () => {
         setVisibleCount((prev) => prev + 10); // Load 10 more models
     };
@@ -45,12 +63,18 @@ const MarketPlace: React.FC = () => {
 
         socket.on("progress", (data) => {
             console.log("🚀 Received Progress Update:", data);
-            setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
+            // setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
         });
 
-        socket.on("download_complete", (data) => {
+        socket.on("status", (data) => {
+            console.log("🚀 Received Progress Update:", data);
+            // setProgress((prev) => ({ ...prev, [data.model_id]: data.status }));
+        });
+
+        socket.on("completed", (data) => {
             console.log("🎉 Model Downloaded:", data);
             alert(`🎉 Model ${data.model_id} downloaded successfully!`);
+            location.reload();
         });
 
         socket.on("download_error", (data) => {
@@ -69,52 +93,66 @@ const MarketPlace: React.FC = () => {
         });
 
         // Cleanup event listeners
-        return () => {
-            socket.off("connect");
-            socket.off("progress");
-            socket.off("download_complete");
-            socket.off("download_error");
-            socket.off("disconnect");
-            socket.off("connect_error");
-        };
+        // return () => {
+        //     socket.off("connect");
+        //     socket.off("progress");
+        //     socket.off("download_complete");
+        //     socket.off("download_error");
+        //     socket.off("disconnect");
+        //     socket.off("connect_error");
+        // };
     }, []);
 
+    useEffect(() => {
+        try {
+            getModelDownload();
+        } catch (error) {
+
+        }
+    }, []);
 
     const handleDownloadModel = (model_id: string) => {
         socket.emit("start_download", { model_id });
     };
 
-    const handleModelSize = async (model_id: string) => {
+    const handleModelDetails = async (model_id: string) => {
         try {
-            const response = await API({
-                url: `models/${APICode.model_size}?model_id=${model_id}`,
-                API_Code: APICode.model_size,
-                data: { model_id },
-            });
-
-            if (!response || !response.success) {
-                throw new Error("Failed to get model size.");
-            }
 
             const modelIndex = modelLists.findIndex((model) => model.id === model_id);
 
-            // Update the size of the specific model
-            // Once model details are fetched, update the model size
-            // If model is found, update its size
+            if (modelLists[modelIndex]?.size === undefined) {
 
-            if (modelIndex === -1) {
-                throw Error("Model not found");
+                const response = await API({
+                    url: `models/${APICode.model_size}?model_id=${model_id}`,
+                    API_Code: APICode.model_size,
+                    data: { model_id },
+                });
+
+                if (!response || !response.success) {
+                    throw new Error("Failed to get model size.");
+                }
+
+
+                // Update the size of the specific model
+                // Once model details are fetched, update the model size
+                // If model is found, update its size
+
+                if (modelIndex === -1) {
+                    throw Error("Model not found");
+                }
+
+                const updatedModelLists = modelLists.map((model, index) =>
+                    index === modelIndex ? { ...model, size: response.data } : model
+                );
+
+                // Update state
+                setModelLists(updatedModelLists);
+
+                // If using SWR, update the cache
+                // mutate("https://huggingface.co/api/models", updatedModelLists, false);
             }
 
-            const updatedModelLists = modelLists.map((model, index) =>
-                index === modelIndex ? { ...model, size: response.data } : model
-            );
 
-            // Update state
-            setModelLists(updatedModelLists);
-
-            // If using SWR, update the cache
-            // mutate("https://huggingface.co/api/models", updatedModelLists, false);
 
 
 
@@ -122,6 +160,60 @@ const MarketPlace: React.FC = () => {
             alert(error?.message || "Failed to get model size.");
         }
     };
+
+    const checkModelDownloaded = async (model_id: string) => {
+        try {
+            if (modelLists.length !== 0) {
+                const modelListIndex = modelLists.findIndex(model => model.modelId === model_id);
+
+                if (modelListIndex !== -1 && modelLists[modelListIndex].size === undefined) {
+                    const saveListIndex = saveListsModel.findIndex(model => model.model_name === model_id);
+
+                    if (saveListIndex !== -1 && modelListIndex !== -1) {
+                        console.log(`Model ID ${model_id} exists in both lists.`);
+
+                        modelLists[modelListIndex].size = {
+                            size: saveListsModel[saveListIndex].size || 0,
+                            unit: saveListsModel[saveListIndex].unit as Unit || Unit.GB
+                        }
+
+                        modelLists[modelListIndex].downloaded = true;
+
+                        setModelLists(modelLists);
+
+                    } else if (modelListIndex !== -1) {
+                        await handleModelDetails(model_id);
+                    } else {
+                        throw Error(`Model ID ${model_id} not found in either list.`);
+                    }
+                }
+
+
+
+            }
+        } catch (error: any) {
+            alert(error?.message);
+        }
+    }
+
+    const handleDeleteModel = async (modelId: string) => {
+
+        if(!modelId){
+            throw Error("No Model Passed To Delete");
+        }
+        const confirmDelete = window.confirm(`Are you sure you want to delete model "${modelId}"?`);
+
+        if (!confirmDelete) return; // If user cancels, exit function
+
+        try {
+            socket.emit("delete_model", { model_id: modelId });
+
+
+        } catch (error) {
+            console.error("Error deleting model:", error);
+        }
+    };
+
 
     if (error) return <div className="text-red-500">Failed to load models.</div>;
     if (isLoading) return <div className="text-gray-500">Loading...</div>;
@@ -156,7 +248,7 @@ const MarketPlace: React.FC = () => {
                                         setExpandedModel(isOpen ? model.id : null);
 
                                         if (isOpen) {
-                                            handleModelSize(model.id);
+                                            checkModelDownloaded(model.id);
                                             mutate(); // Fetch model details
                                         }
                                     }}
@@ -166,18 +258,57 @@ const MarketPlace: React.FC = () => {
                                         <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
                                         <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
                                         <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
+                                        <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag || "N/A"}</p>
+                                        <p><strong>Trending Score:</strong> {model.trendingScore || "N/A"}</p>
+                                        <p><strong>Model Size:</strong> {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
 
-                                        <p>Model Size: {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
+                                        <p><strong>Tags:</strong> </p>
+                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                            {model.tags?.length ? (
+                                                model.tags.map((tag: string, index: number) => (
+                                                    <span
+                                                        key={index}
+                                                        className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
+                                                    >
+                                                        {tag}
+                                                    </span>
+                                                ))
+                                            ) : (
+                                                <span className="text-sm text-gray-500">N/A</span>
+                                            )}
+                                        </div>
 
-                                        <button
-                                            key={model.id}
-                                            onClick={() => handleDownloadModel(model.id || "")}                                            // href={`https://huggingface.co/${model.id}/resolve/main/${file.rfilename}`}
-                                            // target="_blank"
-                                            // rel="noopener noreferrer"
-                                            className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                        >
-                                            Download {model.id}
-                                        </button>
+
+
+                                        {model.downloaded ? (
+                                            // Grouped buttons when the model is downloaded
+                                            <div className="mt-4 flex space-x-2 justify-end">
+                                                <button
+                                                    key={`update-${model.id}`}
+                                                    onClick={() => handleDownloadModel(model.id || "")}
+                                                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                                                >
+                                                    Update
+                                                </button>
+                                                <button
+                                                    key={`delete-${model.id}`}
+                                                    onClick={() => handleDeleteModel(model.id || "")}
+                                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            // Download button when model is not downloaded
+                                            <button
+                                                key={model.id}
+                                                onClick={() => handleDownloadModel(model.id || "")}
+                                                className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                            >
+                                                Download {model.id}
+                                            </button>
+                                        )}
+
                                         {/* Display progress only when it's not empty */}
                                         {progress && Object.keys(progress).length > 0 && (
                                             <div>

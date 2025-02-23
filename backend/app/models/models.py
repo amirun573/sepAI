@@ -27,5 +27,6 @@ class Setting (Base):
     __tablename__ = "settings"
     setting_id = Column(Integer, primary_key=True, index=True)
     path_store_name_main = Column(String, index=True)
+    path_store_cache_model_main = Column(String, index=True)
     notification_enable = Column(Boolean, index=True, default=True)
     log_enable = Column(Boolean, index=True, default=True)

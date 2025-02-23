@@ -10,7 +10,8 @@ function Setting() {
 
     const initialSettings: SettingProps = {
         theme: "dark",
-        modelDownloadPath: "/home/user/Downloads",
+        modelDownloadPath: "",
+        cacheModelDownloadPath: "",
         notification: false,
         log: false,
     }
@@ -153,6 +154,30 @@ function Setting() {
         }
     }
 
+    const updateCachePathDownloadModel = async () => {
+        setIsLoadingSaveModelPathDownload(true);
+        try {
+            const requestSetting = await API({
+                url: `settings/cacheModelDownloadPath`,
+                API_Code: APICode.update_model_path_setting,
+                data: {
+                    cacheModelDownloadPath: settings.cacheModelDownloadPath
+                }
+            });
+
+            if (!requestSetting.success) {
+                throw Error("Setting Cannot Be Loaded");
+            }
+
+            alert(requestSetting.data?.message);
+        } catch (error: any) {
+            alert(error?.message);
+        } finally {
+            setIsLoadingSaveModelPathDownload(false);
+
+        }
+    }
+
     useEffect(() => {
         try {
             setSettings({ ...settings, ["notification"]: toggleNotificationState });
@@ -197,6 +222,24 @@ function Setting() {
                     </div>
                 </li>
 
+                <li className="border-b last:border-none py-2 text-black mb-4">
+                    Path Download Cache Model
+                    <input
+                        id="cacheModelDownloadPath"
+                        type="text"
+                        data-webkitdirectory=""
+                        data-directory=""
+                        className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        onChange={(e) => handleSettings(e)}
+                        value={settings.cacheModelDownloadPath}
+
+                    />
+                    <div className="justify-end mt-4">
+                        <button className="bg-black text-white py-2 px-6 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500" onClick={updateCachePathDownloadModel}>
+                            Save
+                        </button>
+                    </div>
+                </li>
 
                 {/* <li className="border-b last:border-none py-2 text-black mb-4" >
                     <div className="flex items-center justify-between w-full">

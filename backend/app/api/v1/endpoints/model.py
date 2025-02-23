@@ -1,12 +1,7 @@
-import asyncio
-import os
-from app.models.model.model import MODEL_DIR
-from fastapi import APIRouter, WebSocket, Query
-from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse
-from app.models.model.model import Download_Model_Huggingface, Download_Model_With_Progress, model_size
-import socketio
-from huggingface_hub import snapshot_download
 
+from fastapi import APIRouter, WebSocket, Query
+from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, PromptRequest
+from app.models.model.model import model_size, Get_Model_Downloaded, load_model_from_db,prompt
 
 
 class ModelController:
@@ -15,31 +10,36 @@ class ModelController:
 
     router = APIRouter()
 
-  
-    @router.post("/download", response_model=DownloadModelRequest)
-    async def download_model(request: DownloadModelRequest):
-        saved_model = Download_Model_Huggingface(request)
-
-        if(saved_model.model_path != "None"):
-            return DownloadModelResponse(message="Download started", model_path=f"models/{request.model_id}")
-        else:
-            return DownloadModelResponse(message="Error downloading model", model_path="None")
-
-    @router.websocket("/ws/download/{model_id}")
-    async def websocket_endpoint(websocket: WebSocket, model_id: str):
-        """WebSocket connection for download progress updates."""
-        await websocket.accept()
-        await Download_Model_With_Progress(model_id, websocket)
-        await websocket.close()
-
     @router.get("/model_size", response_model=ModelSizeResponse)
     async def download_model(model_id: str = Query(..., description="The ID of the model")):
-        saved_model = await model_size(ModelSizeRequest(model_id=model_id))  # Pass as an object
+        # Pass as an object
+        saved_model = await model_size(ModelSizeRequest(model_id=model_id))
 
         if saved_model.size != "None":
             return ModelSizeResponse(size=saved_model.size, unit=saved_model.unit)
         else:
             return ModelSizeResponse(size=0, unit='')
 
+    @router.get("/")
+    async def get_models():
+        return await Get_Model_Downloaded()  # Pass as an object
+
+    @router.get("/load_model")
+    async def download_model(model_id: str = Query(..., description="The ID of the model"),prompt: str = Query(..., description="Question From User")):
+            # Pass as an object
+            prompt_answer = await load_model_from_db(model_id, prompt)
+
+            # print("saved_model-->",saved_model)
+
+            return prompt_answer
+    
+    @router.post("/prompt", summary="Generate an AI response based on a given model and prompt", description="This endpoint takes a model ID and a user prompt, processes it, and returns a response.")
+    async def prompt_answer(request: PromptRequest ):
+            # Pass as an object
+            prompt_answer = await prompt(request.model_id, request.prompt)
+
+            # print("saved_model-->",saved_model)
+
+            return prompt_answer
 model_controller = ModelController()
 router = model_controller.router
