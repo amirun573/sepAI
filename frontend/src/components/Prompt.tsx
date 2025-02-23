@@ -14,7 +14,7 @@ const Prompt = () => {
 
         try {
             // Your submit logic here, e.g., sending data to an API
-            await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulating async action
+            // await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulating async action
 
             if (!prompt || selectedModelId <= 0) {
                 throw Error("Prompt or Model ID is missing");
