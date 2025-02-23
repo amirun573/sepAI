@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import ModelList from "./model/ModelList";
+import API from "@/_Common/function/api";
+import { APICode } from "@/_Common/enum/api-code.enum";
 const Prompt = () => {
 
     const [prompt, setPrompt] = useState<string>('');
@@ -8,13 +10,33 @@ const Prompt = () => {
 
 
     const handleSubmit = async () => {
+        setLoading(true);
+
         try {
-            setLoading(true);
             // Your submit logic here, e.g., sending data to an API
             await new Promise((resolve) => setTimeout(resolve, 2000)); // Simulating async action
+
+            if (!prompt || selectedModelId <= 0) {
+                throw Error("Prompt or Model ID is missing");
+            }
+            const response = await API({
+                url: 'models/prompt',
+                API_Code: APICode.prompt,
+                data: {
+                    prompt: prompt,
+                    model_id: selectedModelId,
+                },
+            });
+
+            if (!response.success) {
+                throw Error("Failed to submit");
+            }
+
+            alert(response.data);
             console.log("Form submitted successfully!");
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error submitting:", error);
+            alert(error?.meesage || "Failed to submit")
         } finally {
             setLoading(false);
         }

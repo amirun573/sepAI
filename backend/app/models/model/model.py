@@ -700,3 +700,43 @@ async def load_model_from_db(model_id: str,prompt: str):
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
     
+
+async def prompt(model_id: int,prompt: str):
+    try:
+        async with async_session_maker() as db:
+            print("model_id -->", model_id)
+            result = await db.execute(select(Model).where(Model.model_id == model_id))
+            model_entry = result.scalars().first()
+
+            if not model_entry:
+                print(f"❌ Model {model_id} not found in the database.")
+                return None
+
+            model_path = get_snapshot_path(model_entry.path)
+            print(f"📂 Loading model from: {model_path}")
+
+            # Use MPS if available, otherwise fallback to CPU
+            device = "mps" if torch.backends.mps.is_available() else "cpu"
+
+            text_generator = pipeline(
+                "text-generation",
+                model=model_path,
+                trust_remote_code=True,
+                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
+                torch_dtype=torch.float16 if device == "mps" else "auto"
+            )
+
+            text = prompt
+            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
+
+            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
+            print("output_text==>",output_text)
+
+            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+
+            return output_text
+
+    except Exception as e:
+        print(f"❌ Error loading model {model_id}: {str(e)}")
+        return None
+    

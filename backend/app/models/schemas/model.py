@@ -18,3 +18,7 @@ class ModelSizeResponse(BaseModel):
 class ModelSizeCalculate(BaseModel):
     size: float
     unit: str
+
+class PromptRequest(BaseModel):
+    model_id: int
+    prompt: str
