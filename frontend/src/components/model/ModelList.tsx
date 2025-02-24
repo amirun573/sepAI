@@ -10,7 +10,7 @@ interface ModelListProps {
 }
 
 const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
-    const [selectedModelIndex, setSelectedModelIndex] = useState<number>(0);
+    const [selectedModelIndex, setSelectedModelIndex] = useState<number>(-1);
     const [modelSavedLists, setModelSavedLists] = useState<APIModelListsResponse[]>([]);
 
     const loadModel = async () => {
@@ -45,6 +45,9 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
                     value={selectedModelIndex}
                     onChange={handleModelChange}
                 >
+                    <option key={'-'} value={-1}>
+                        {'Select Model'}
+                    </option>
                     {modelSavedLists.map((model, index) => (
                         <option key={model.model_id} value={index}>
                             {model.model_name}

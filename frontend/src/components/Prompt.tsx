@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import ModelList from "./model/ModelList";
 import API from "@/_Common/function/api";
 import { APICode } from "@/_Common/enum/api-code.enum";
+import { APIChatHistoryResponse } from "@/_Common/interface/api.interface";
 
-const Prompt = ({ onSendMessage }: { onSendMessage: (message: string) => void }) => {
+const Prompt = ({ onSendMessage }: { onSendMessage: (data: APIChatHistoryResponse) => void }) => {
     const [prompt, setPrompt] = useState<string>("");
     const [loading, setLoading] = useState<boolean>(false);
-    const [selectedModelId, setSelectedModelId] = useState<number>(0);
+    const [selectedModelId, setSelectedModelId] = useState<number>(-1);
     const [error, setError] = useState<string>("");
 
     const handleSubmit = async () => {
@@ -14,12 +15,19 @@ const Prompt = ({ onSendMessage }: { onSendMessage: (message: string) => void })
         setError("");
 
         try {
-            if (!prompt.trim() || selectedModelId <= 0) {
+            if (!prompt.trim() || selectedModelId < 0) {
                 throw new Error("Please enter a prompt and select a model.");
             }
 
+
+            const newUserMessage: APIChatHistoryResponse = {
+                chat_id: Math.floor(Math.random() * 7), // Temporary ID
+                content: prompt,
+                role: "user",
+                created_at: new Date().toISOString(),
+            };
             // Display user message in chat
-            onSendMessage(prompt);
+            onSendMessage(newUserMessage);
 
             const response = await API({
                 url: "models/prompt",
@@ -34,8 +42,15 @@ const Prompt = ({ onSendMessage }: { onSendMessage: (message: string) => void })
                 throw new Error("Failed to submit");
             }
 
+            const newModelMessage: APIChatHistoryResponse = {
+                chat_id: Math.floor(Math.random() * 7), // Temporary ID
+                content: response.data,
+                role: "model",
+                created_at: new Date().toISOString(),
+            };
+
             // Display AI response in chat
-            onSendMessage(response.data);
+            onSendMessage(newModelMessage);
         } catch (error: any) {
             setError(error?.message || "Failed to submit");
         } finally {
