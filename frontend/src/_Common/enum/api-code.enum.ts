@@ -9,4 +9,6 @@ export enum APICode {
     delete_model = "delete_model",
     update_cahce_model_path_setting = 'update_cahce_model_path_setting',
     prompt = 'prompt',
+    chat_history = 'chat_history',
+
   }

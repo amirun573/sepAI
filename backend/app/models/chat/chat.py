@@ -45,7 +45,7 @@ async def Chat_History(
             chats = result.fetchall()
 
             chat_data = [
-                ChatResponse(id=row.id, message=row.message, sender=row.sender, timestamp=str(row.timestamp))
+                ChatResponse(chat_id=row.chat_id, content=row.content, role=row.role, created_at=str(row.created_at))
                 for row in chats
             ]
 

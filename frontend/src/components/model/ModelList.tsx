@@ -39,7 +39,7 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
 
     return (
         <>
-            {modelSavedLists.length > 0 && (
+            {modelSavedLists.length > 0 ? (
                 <select
                     className="ml-4 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                     value={selectedModelIndex}
@@ -51,9 +51,14 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
                         </option>
                     ))}
                 </select>
+            ) : (
+                <p className="text-red-500 font-medium mt-2">
+                    No Model Detected. Please download the model from the marketplace.
+                </p>
             )}
         </>
     );
+
 };
 
 export default ModelList;

@@ -163,6 +163,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
         break;
       }
 
+      case APICode.chat_history: {
+        const chatHistory = await axios.get(fullURL);
+
+        if (!chatHistory) {
+          throw new Error("Not Getting Any Models");
+        }
+
+        response = {
+          success: true,
+          status: chatHistory.status,
+          data: chatHistory.data,
+        };
+
+        break;
+      }
+
       default: {
         throw new Error("API Code not found");
       }
