@@ -50,3 +50,10 @@ export interface APIModelListsResponse {
   size: number;
   unit: Unit;
 }
+
+export interface APIChatHistoryResponse {
+  chat_id: number;
+  content: string;
+  role: string;
+  created_at: string;
+}

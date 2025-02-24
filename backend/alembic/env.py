@@ -19,8 +19,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set target metadata for autogenerate to work
+
 from app.models.models import Base
+# Set target metadata for autogenerate to work
 target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode without connecting to the database."""

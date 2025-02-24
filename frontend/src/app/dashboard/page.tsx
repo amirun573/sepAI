@@ -1,15 +1,62 @@
 'use client';
 
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Header from '@/components/Header';
 import Prompt from '@/components/Prompt';
 import DeviceStatus from '@/components/DeviceStatus';
+import ChatLists from '@/components/chat/ChatLists';
+import { APIChatHistoryResponse } from '@/_Common/interface/api.interface';
+import API from '@/_Common/function/api';
+import { APICode } from '@/_Common/enum/api-code.enum';
+
 const Dashboard: React.FC = () => {
 
     const [deviceStatusOpen, setDeviceStatusOpen] = useState<boolean>(true);
 
+    const [chatHistory, setChatHistory] = useState<APIChatHistoryResponse[]>([]);
+    const [limit, setLimit] = useState<number>(10);
+    const [skip, setSkip] = useState<number>(10);
+
+
+    const handleSendMessage = (data: APIChatHistoryResponse) => {
+
+        setDeviceStatusOpen((prev) =>{
+            return false;
+        });
+        // Update chat history with the new message
+        setChatHistory((prevChatHistory) => [
+            ...(Array.isArray(prevChatHistory) ? prevChatHistory : []), // Ensure it's always an array
+            {
+                chat_id: data.chat_id, // Unique ID
+                content: data.content,
+                role: data.role,
+                created_at: data.created_at,
+            },
+        ]);
+    };
+
+    const fetchChat = async () => {
+        try {
+            const response = await API({
+                url: `chats/history/?limit=${limit}&skip=${skip}`,
+                API_Code: APICode.chat_history
+            });
+
+            if (!response.success) {
+                throw Error("No Chat History Being Fetch")
+            }
+
+            setChatHistory(response.data as APIChatHistoryResponse[]);
+        } catch (error: any) {
+            alert(error?.message || "Error At Fetch History")
+        }
+    }
+
+    useEffect(() => {
+        fetchChat();
+    }, []);
 
     return (
         <div className="min-h-screen flex bg-gray-100">
@@ -25,9 +72,15 @@ const Dashboard: React.FC = () => {
                 {/* Cards Section */}
                 <DeviceStatus status={deviceStatusOpen} />
 
+                {/* Chat History */}
+                <div className='mt-10'>
+                    <ChatLists chatHistory={chatHistory} />
+                </div>
+
+
                 {/* Charts Section */}
                 <div className='mt-10'>
-                    <Prompt />
+                    <Prompt onSendMessage={handleSendMessage} />
 
                 </div>
 

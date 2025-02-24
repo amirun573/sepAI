@@ -18,6 +18,10 @@ For Alambic migration. Can run
 1. `alembic revision --autogenerate -m "{message}"`
 2. Then, run `alembic upgrade head`
 
+If Migration Got problem,
+1. Delete Alambic  Version Table `DROP TABLE alembic_version;`
+2. Regenerate back using Alambic Migration Steps.
+
 SQLite
 Check Database Path
 1. python

@@ -1,8 +1,8 @@
-"""Initial migration
+"""Reinitialize migration
 
-Revision ID: 4b1abf1d900f
-Revises: 75f2239332ab
-Create Date: 2025-02-05 17:18:34.255562
+Revision ID: eb3949f8dd2b
+Revises: 167894a94615
+Create Date: 2025-02-24 13:38:39.146321
 
 """
 from typing import Sequence, Union
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '4b1abf1d900f'
-down_revision: Union[str, None] = '75f2239332ab'
+revision: str = 'eb3949f8dd2b'
+down_revision: Union[str, None] = '167894a94615'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -40,6 +40,19 @@ def upgrade() -> None:
     op.create_index(op.f('ix_models_path'), 'models', ['path'], unique=True)
     op.create_index(op.f('ix_models_size'), 'models', ['size'], unique=False)
     op.create_index(op.f('ix_models_unit'), 'models', ['unit'], unique=False)
+    op.create_table('settings',
+    sa.Column('setting_id', sa.Integer(), nullable=False),
+    sa.Column('path_store_name_main', sa.String(), nullable=True),
+    sa.Column('path_store_cache_model_main', sa.String(), nullable=True),
+    sa.Column('notification_enable', sa.Boolean(), nullable=True),
+    sa.Column('log_enable', sa.Boolean(), nullable=True),
+    sa.PrimaryKeyConstraint('setting_id')
+    )
+    op.create_index(op.f('ix_settings_log_enable'), 'settings', ['log_enable'], unique=False)
+    op.create_index(op.f('ix_settings_notification_enable'), 'settings', ['notification_enable'], unique=False)
+    op.create_index(op.f('ix_settings_path_store_cache_model_main'), 'settings', ['path_store_cache_model_main'], unique=False)
+    op.create_index(op.f('ix_settings_path_store_name_main'), 'settings', ['path_store_name_main'], unique=False)
+    op.create_index(op.f('ix_settings_setting_id'), 'settings', ['setting_id'], unique=False)
     op.create_table('users',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('full_name', sa.String(), nullable=True),
@@ -58,6 +71,12 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_full_name'), table_name='users')
     op.drop_index(op.f('ix_users_email'), table_name='users')
     op.drop_table('users')
+    op.drop_index(op.f('ix_settings_setting_id'), table_name='settings')
+    op.drop_index(op.f('ix_settings_path_store_name_main'), table_name='settings')
+    op.drop_index(op.f('ix_settings_path_store_cache_model_main'), table_name='settings')
+    op.drop_index(op.f('ix_settings_notification_enable'), table_name='settings')
+    op.drop_index(op.f('ix_settings_log_enable'), table_name='settings')
+    op.drop_table('settings')
     op.drop_index(op.f('ix_models_unit'), table_name='models')
     op.drop_index(op.f('ix_models_size'), table_name='models')
     op.drop_index(op.f('ix_models_path'), table_name='models')

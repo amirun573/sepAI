@@ -10,7 +10,7 @@ interface ModelListProps {
 }
 
 const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
-    const [selectedModelIndex, setSelectedModelIndex] = useState<number>(0);
+    const [selectedModelIndex, setSelectedModelIndex] = useState<number>(-1);
     const [modelSavedLists, setModelSavedLists] = useState<APIModelListsResponse[]>([]);
 
     const loadModel = async () => {
@@ -39,21 +39,29 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
 
     return (
         <>
-            {modelSavedLists.length > 0 && (
+            {modelSavedLists.length > 0 ? (
                 <select
                     className="ml-4 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
                     value={selectedModelIndex}
                     onChange={handleModelChange}
                 >
+                    <option key={'-'} value={-1}>
+                        {'Select Model'}
+                    </option>
                     {modelSavedLists.map((model, index) => (
                         <option key={model.model_id} value={index}>
                             {model.model_name}
                         </option>
                     ))}
                 </select>
+            ) : (
+                <p className="text-red-500 font-medium mt-2">
+                    No Model Detected. Please download the model from the marketplace.
+                </p>
             )}
         </>
     );
+
 };
 
 export default ModelList;

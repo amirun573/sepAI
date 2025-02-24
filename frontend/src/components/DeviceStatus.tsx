@@ -1,3 +1,5 @@
+"use client";
+
 import { APICode } from "@/_Common/enum/api-code.enum";
 import API from "@/_Common/function/api";
 import { DeviceCondition, DeviceSpecification, GPUDetails } from "@/_Common/interface/device.interface";
