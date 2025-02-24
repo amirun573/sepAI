@@ -5,7 +5,6 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine
-from app.models.models import Base
 
 # Add the app's root directory to sys.path so that imports work
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -20,6 +19,8 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
+from app.models.models import Base
 # Set target metadata for autogenerate to work
 target_metadata = Base.metadata
 def run_migrations_offline() -> None:

@@ -1,5 +1,6 @@
 # app/models/models.py
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Float, Boolean, Text, DateTime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
@@ -30,3 +31,13 @@ class Setting (Base):
     path_store_cache_model_main = Column(String, index=True)
     notification_enable = Column(Boolean, index=True, default=True)
     log_enable = Column(Boolean, index=True, default=True)
+
+class Chat(Base):
+    __tablename__ = "chats"
+
+    chat_id = Column(Integer, primary_key=True, index=True)
+    role = Column(String(10), nullable=False)  # "user" or "model"
+    content = Column(Text, nullable=False)  # Message or model response content
+    created_at = Column(DateTime, default=datetime.utcnow)  # Timestamp
+    is_read = Column(Boolean, default=False)  # Read status
+    status = Column(String(20), default="pending")  # "pending", "processed", "error"
