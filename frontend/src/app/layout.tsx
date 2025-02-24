@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sepai Studio",
   description: "Your Intelligent LLM Platform",
+  icons: {
+    icon: 'sepai-icon.ico'
+  }
 };
 
 export default function RootLayout({

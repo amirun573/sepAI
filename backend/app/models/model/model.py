@@ -27,6 +27,9 @@ import huggingface_hub
 import glob
 import re
 
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 progress_status: Dict[str, float] = {}
 # Create a Socket.IO server
 db: AsyncSession = AsyncSession()
