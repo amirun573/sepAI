@@ -1,4 +1,6 @@
 import json
+from app.models.multiproessing.AsyncProcessor import AsyncProcessor
+from app.models.device.os.factory import OSFactory
 from sqlalchemy.future import select
 from huggingface_hub import snapshot_download, HfApi, list_repo_files, hf_hub_download
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, ModelSizeCalculate
@@ -6,7 +8,7 @@ from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
 import os
-from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM, pipeline
+from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM, pipeline, BitsAndBytesConfig
 import asyncio
 from tqdm import tqdm
 import time
@@ -44,11 +46,16 @@ api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
 
+async_processor = AsyncProcessor()  # Create an instance
+device_os = OSFactory()
+
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
 # 🔹 Synchronous function to handle download & progress
 # 🔹 Function to track download progress manually
 # Track file download progress manually
+
+
 async def track_download_progress(model_path, model_id, sid, sio, interval=5):
     """Continuously tracks download progress and emits updates."""
     previous_size = 0
@@ -553,7 +560,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             # model_path = os.path.join(cache_path, model_id.replace(
             #     '/', '--'))  # No "model--" prefix
 
-            model_path = os.path.join(cache_path, f"models--{model_id.replace('/', '--')}")
+            model_path = os.path.join(
+                cache_path, f"models--{model_id.replace('/', '--')}")
             os.makedirs(model_path, exist_ok=True)
             print("model_path -->", model_path)
 
@@ -580,7 +588,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
 
                 loop = asyncio.get_running_loop()
                 try:
-                     # Asynchronously download model
+                    # Asynchronously download model
                     await loop.run_in_executor(None, lambda: snapshot_download(
                         repo_id=model_id,
                         cache_dir=cache_path,
@@ -601,14 +609,13 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 except Exception as e:
                     error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
                     print(error_msg)
-                    traceback.print_exc() 
+                    traceback.print_exc()
                     await sio.emit("error", {"sid": sid, "message": error_msg})
                     return None
 
                 msg = f"🎯 Model successfully cached at: {model_path}"
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
-
 
             # Ensure the model_path exists before listing files
             if not os.path.exists(model_path):
@@ -646,25 +653,28 @@ async def download_model_to_cache(sid, model_id: str, sio):
         traceback.print_exc()
         await sio.emit("error", {"sid": sid, "message": error_msg})
         return None
+
+
 def get_snapshot_path(base_dir):
     # Construct the path to the snapshots directory
     snapshots_dir = os.path.join(base_dir, "snapshots")
-    
+
     # Use glob to list all directories in the snapshots directory
-    snapshot_folders = [d for d in glob.glob(os.path.join(snapshots_dir, "*")) if os.path.isdir(d)]
-    
+    snapshot_folders = [d for d in glob.glob(
+        os.path.join(snapshots_dir, "*")) if os.path.isdir(d)]
+
     if not snapshot_folders:
         raise ValueError(f"No snapshot folder found in {snapshots_dir}.")
-    
+
     # If there are multiple snapshots, you can choose one based on your criteria.
     # Here we sort by modification time (latest first).
     snapshot_folders.sort(key=os.path.getmtime, reverse=True)
-    
+
     # Return the first snapshot folder (most recent)
     return snapshot_folders[0]
 
 
-async def load_model_from_db(model_id: str,prompt: str):
+async def load_model_from_db(model_id: str, prompt: str):
     try:
         async with async_session_maker() as db:
             print("model_id -->", model_id)
@@ -685,26 +695,34 @@ async def load_model_from_db(model_id: str,prompt: str):
                 "text-generation",
                 model=model_path,
                 trust_remote_code=True,
-                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
+                # Set device index (0 for MPS, -1 for CPU)
+                device=0 if device == "mps" else -1,
                 torch_dtype=torch.float16 if device == "mps" else "auto"
             )
 
             text = prompt
-            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
+            generated_text = text_generator(
+                text, max_length=200, do_sample=True, top_k=50, top_p=0.95, truncation=True)
 
-            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>",output_text)
+            output_text = re.sub(
+                r'\s+', ' ', generated_text[0]["generated_text"]).strip()
+            print("output_text==>", output_text)
 
-            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+            print(
+                f"✅ Successfully loaded model: {model_id} on {device.upper()}")
 
             return output_text
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
-    
 
-async def prompt(model_id: int,prompt: str):
+
+async def prompt(model_id: int, prompt: str):
+    return await _async_prompt(model_id, prompt)
+
+
+async def _async_prompt(model_id: int, prompt: str):
     try:
         async with async_session_maker() as db:
             print("model_id -->", model_id)
@@ -718,28 +736,51 @@ async def prompt(model_id: int,prompt: str):
             model_path = get_snapshot_path(model_entry.path)
             print(f"📂 Loading model from: {model_path}")
 
+
+
             # Use MPS if available, otherwise fallback to CPU
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            device = str(device_os.check_pytorch_device())
+            print("Device-->", device)
+            print(
+                f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+            model = AutoModelForCausalLM.from_pretrained(
+                model_path,
+                # device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
+                torch_dtype=torch.float16 if device in [
+                    "mps", "cuda"] else "auto",
+                trust_remote_code=True,
+                
+            )
+
+            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+
+            model = torch.compile(model)  # Compile for optimization
+            model.to(device)
+            
 
             text_generator = pipeline(
                 "text-generation",
-                model=model_path,
+                model=model,
+                tokenizer= tokenizer,
                 trust_remote_code=True,
-                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
-                torch_dtype=torch.float16 if device == "mps" else "auto"
+                device_map = "auto"
             )
 
             text = prompt
-            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
+            generated_text = text_generator(text,
+                                            max_length=100,
+                                            do_sample=True,
+                                            top_k=50,
+                                            top_p=0.95,
+                                            truncation=True,
+                                            repetition_penalty=1.2)
 
-            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>",output_text)
-
-            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+            output_text = re.sub(
+                r'\s+', ' ', generated_text[0]["generated_text"]).strip()
+            print("output_text==>", output_text)
 
             return output_text
 
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
-    
