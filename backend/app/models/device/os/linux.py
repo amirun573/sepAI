@@ -4,6 +4,10 @@ from pathlib import Path  # Correct import
 from .os import OSHandler
 
 class LinuxHandler(OSHandler):
+
+    def os_name(self) -> str:
+        return "Linux"
+    
     def get_appdata_path(self) -> str:
         return os.path.expanduser(f"~/.local/share/{self.app_name}")
     

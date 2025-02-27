@@ -1,4 +1,6 @@
 import json
+from app.models.multiproessing.AsyncProcessor import AsyncProcessor
+from app.models.device.os.factory import OSFactory
 from sqlalchemy.future import select
 from huggingface_hub import snapshot_download, HfApi, list_repo_files, hf_hub_download
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, ModelSizeCalculate
@@ -6,7 +8,7 @@ from app.core.dependencies import get_db
 from typing import List, Dict
 from fastapi import WebSocket, HTTPException
 import os
-from transformers import AutoModel, AutoTokenizer,AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM, pipeline
+from transformers import AutoModel, AutoTokenizer, AutoModelForMaskedLM, AutoConfig, AutoModelForCausalLM, pipeline, BitsAndBytesConfig
 import asyncio
 from tqdm import tqdm
 import time
@@ -26,7 +28,8 @@ from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
 import huggingface_hub
 import glob
 import re
-
+from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+from functools import partial
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -44,11 +47,26 @@ api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
 
+async_processor = AsyncProcessor()  # Create an instance
+device_os = OSFactory()
+
+# Global variables for model and tokenizer
+model = None
+tokenizer = None
+text_generator = None
+
+# Store loaded models in a dictionary
+loaded_models = {}
+
+semaphore = asyncio.Semaphore(4)
+
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
 # 🔹 Synchronous function to handle download & progress
 # 🔹 Function to track download progress manually
 # Track file download progress manually
+
+
 async def track_download_progress(model_path, model_id, sid, sio, interval=5):
     """Continuously tracks download progress and emits updates."""
     previous_size = 0
@@ -553,7 +571,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             # model_path = os.path.join(cache_path, model_id.replace(
             #     '/', '--'))  # No "model--" prefix
 
-            model_path = os.path.join(cache_path, f"models--{model_id.replace('/', '--')}")
+            model_path = os.path.join(
+                cache_path, f"models--{model_id.replace('/', '--')}")
             os.makedirs(model_path, exist_ok=True)
             print("model_path -->", model_path)
 
@@ -580,7 +599,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
 
                 loop = asyncio.get_running_loop()
                 try:
-                     # Asynchronously download model
+                    # Asynchronously download model
                     await loop.run_in_executor(None, lambda: snapshot_download(
                         repo_id=model_id,
                         cache_dir=cache_path,
@@ -601,14 +620,13 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 except Exception as e:
                     error_msg = f"❌ Failed to download model {model_id}: {str(e)}"
                     print(error_msg)
-                    traceback.print_exc() 
+                    traceback.print_exc()
                     await sio.emit("error", {"sid": sid, "message": error_msg})
                     return None
 
                 msg = f"🎯 Model successfully cached at: {model_path}"
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
-
 
             # Ensure the model_path exists before listing files
             if not os.path.exists(model_path):
@@ -646,68 +664,100 @@ async def download_model_to_cache(sid, model_id: str, sio):
         traceback.print_exc()
         await sio.emit("error", {"sid": sid, "message": error_msg})
         return None
+
+
 def get_snapshot_path(base_dir):
     # Construct the path to the snapshots directory
     snapshots_dir = os.path.join(base_dir, "snapshots")
-    
+
     # Use glob to list all directories in the snapshots directory
-    snapshot_folders = [d for d in glob.glob(os.path.join(snapshots_dir, "*")) if os.path.isdir(d)]
-    
+    snapshot_folders = [d for d in glob.glob(
+        os.path.join(snapshots_dir, "*")) if os.path.isdir(d)]
+
     if not snapshot_folders:
         raise ValueError(f"No snapshot folder found in {snapshots_dir}.")
-    
+
     # If there are multiple snapshots, you can choose one based on your criteria.
     # Here we sort by modification time (latest first).
     snapshot_folders.sort(key=os.path.getmtime, reverse=True)
-    
+
     # Return the first snapshot folder (most recent)
     return snapshot_folders[0]
 
 
-async def load_model_from_db(model_id: str,prompt: str):
+async def get_or_load_model(model_id: str):
+    """Retrieve model from memory, or load it if not already loaded."""
     try:
-        async with async_session_maker() as db:
-            print("model_id -->", model_id)
-            result = await db.execute(select(Model).where(Model.model_name == model_id))
-            model_entry = result.scalars().first()
+        print("loaded_models", loaded_models)
+        if model_id in loaded_models:
+            print(f"✅ Model {model_id} already loaded.")
+            return loaded_models[model_id]
 
-            if not model_entry:
-                print(f"❌ Model {model_id} not found in the database.")
-                return None
-
-            model_path = get_snapshot_path(model_entry.path)
-            print(f"📂 Loading model from: {model_path}")
-
-            # Use MPS if available, otherwise fallback to CPU
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
-
-            text_generator = pipeline(
-                "text-generation",
-                model=model_path,
-                trust_remote_code=True,
-                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
-                torch_dtype=torch.float16 if device == "mps" else "auto"
+        # Offload the model loading process to a separate thread
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            text_generator = await loop.run_in_executor(
+                pool,
+                partial(_load_model_off_thread, model_id)
             )
 
-            text = prompt
-            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
+        if text_generator:
+            loaded_models[model_id] = text_generator  # Cache the model
+            return text_generator
+        else:
+            return None
 
-            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>",output_text)
+    except Exception as e:
+        print(f"❌ Error in get_or_load_model: {str(e)}")
+        return None
+def _load_model_off_thread(model_id: str):
+    """Helper function to load the model in a separate thread."""
+    try:
+        # Fetch model path from the database (blocking operation)
+        model_path = asyncio.run(load_model_from_db(model_id))
+        if not model_path:
+            return None
 
-            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+        # Load the model (blocking operation)
+        return _load_model_sync(model_id, model_path)
+    except Exception as e:
+        print(f"❌ Error in _load_model_off_thread: {str(e)}")
+        return None
 
-            return output_text
+def _load_model_sync(model_id: str, model_path: str):
+    """Synchronous function to load the model."""
+    try:
+        device = str(device_os.check_pytorch_device())
+        print(f"📂 Loading model {model_id} from {model_path} on {device}...")
 
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
+            trust_remote_code=False
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
+        
+        model.to(device)
+
+        text_generator = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            device_map="auto"
+        )
+
+        print(f"✅ Model {model_id} is ready!")
+        return text_generator
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
-    
 
-async def prompt(model_id: int,prompt: str):
+async def load_model_from_db(model_id: str):
+    """Fetch model path from the database."""
     try:
         async with async_session_maker() as db:
-            print("model_id -->", model_id)
+            print("🔍 Fetching model path for:", model_id)
             result = await db.execute(select(Model).where(Model.model_id == model_id))
             model_entry = result.scalars().first()
 
@@ -716,30 +766,117 @@ async def prompt(model_id: int,prompt: str):
                 return None
 
             model_path = get_snapshot_path(model_entry.path)
-            print(f"📂 Loading model from: {model_path}")
+            print(f"📂 Found model path: {model_path}")
 
-            # Use MPS if available, otherwise fallback to CPU
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            return model_path
+    except Exception as e:
+        print(f"❌ Error fetching model {model_id}: {str(e)}")
+        return None
 
-            text_generator = pipeline(
-                "text-generation",
-                model=model_path,
-                trust_remote_code=True,
-                device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
-                torch_dtype=torch.float16 if device == "mps" else "auto"
-            )
 
-            text = prompt
-            generated_text = text_generator(text, max_length=200, do_sample=True, top_k=50, top_p=0.95,truncation=True)
+async def load_model(model_id: str, model_path: str):
+    """Loads the model into memory and stores it in a dictionary."""
+    try:
+        if model_id in loaded_models:
+            print(f"✅ Model {model_id} already loaded.")
+            return loaded_models[model_id]
 
-            output_text = re.sub(r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>",output_text)
+        device = str(device_os.check_pytorch_device())
+        print(f"📂 Loading model {model_id} from {model_path} on {device}...")
 
-            print(f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
+            trust_remote_code=False
+        )
 
-            return output_text
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
+        
+        model.to(device)
 
+        text_generator = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            device_map="auto"
+        )
+
+        loaded_models[model_id] = text_generator  # Store generator in cache
+        print(f"✅ Model {model_id} is ready!")
+        return text_generator
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
-    
+
+
+async def prompt(model_id: int, prompt: str):
+    return await _async_prompt(model_id, prompt)
+
+
+async def _async_prompt(model_id: str, prompt: str):
+    try:
+        print("loaded_models", loaded_models)
+
+        # ✅ Check if model is in memory
+        if model_id in loaded_models:
+            print(f"✅ Using cached model {model_id}.")
+            text_generator = loaded_models[model_id]  # Directly use the pipeline
+        else:
+            # ✅ Load model from database
+            async with async_session_maker() as db:
+                print("🔍 Fetching model_id -->", model_id)
+                result = await db.execute(select(Model).where(Model.model_id == model_id))
+                model_entry = result.scalars().first()
+
+                if not model_entry:
+                    print(f"❌ Model {model_id} not found in the database.")
+                    return "Model not found"
+
+                model_path = get_snapshot_path(model_entry.path)
+                print(f"📂 Loading model from: {model_path}")
+
+                # ✅ Use cached model loading function
+                text_generator = await load_model(model_id, model_path)
+                if not text_generator:
+                    return "Failed to load model"
+
+        print("🚀 Start Generate Text")
+
+        # ✅ Ensure we are getting the correct event loop
+        loop = asyncio.get_running_loop()
+
+        # ✅ Run _generate_text in ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            generated_text = await loop.run_in_executor(
+                pool,
+                partial(_generate_text, text_generator, prompt)
+            )
+
+        print("✅ Generated Text:", generated_text)
+
+        # ✅ Return generated text to FastAPI response
+        return generated_text
+
+    except Exception as e:
+        print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
+        return f"Error generating response: {str(e)}"
+        
+def _generate_text(text_generator, prompt):
+    try:
+        print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log
+        generated_text = text_generator(
+            prompt,
+            max_length=100,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            truncation=True,
+            repetition_penalty=1.2,
+        )
+        print("✅ _generate_text output:", generated_text)  # ✅ Debugging log
+
+        # ✅ Ensure proper format
+        return generated_text[0]["generated_text"].strip() if generated_text else None
+    except Exception as e:
+        print(f"❌ Error in _generate_text: {e}")
+        return None

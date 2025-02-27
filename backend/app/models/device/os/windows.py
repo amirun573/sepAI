@@ -4,6 +4,8 @@ from pathlib import Path  # Correct import
 from .os import OSHandler
 
 class WindowsHandler(OSHandler):
+    def os_name(self) -> str:
+        return "Windows"
     def get_appdata_path(self) -> str:
         return os.path.join(os.getenv("APPDATA"), self.app_name)
     def get_model_path(self) -> str:

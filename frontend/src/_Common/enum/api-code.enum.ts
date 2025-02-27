@@ -10,5 +10,5 @@ export enum APICode {
     update_cahce_model_path_setting = 'update_cahce_model_path_setting',
     prompt = 'prompt',
     chat_history = 'chat_history',
-
+    load_model = 'load_model',
   }
