@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, WebSocket, Query
 from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, PromptRequest
-from app.models.model.model import model_size, Get_Model_Downloaded, load_model_from_db,prompt
+from app.models.model.model import model_size, Get_Model_Downloaded, load_model_from_db,prompt, get_or_load_model
 
 
 
@@ -26,13 +26,13 @@ class ModelController:
         return await Get_Model_Downloaded()  # Pass as an object
 
     @router.get("/load_model")
-    async def download_model(model_id: str = Query(..., description="The ID of the model"),prompt: str = Query(..., description="Question From User")):
+    async def download_model(model_id: str = Query(..., description="The ID of the model")):
             # Pass as an object
-            prompt_answer = await load_model_from_db(model_id, prompt)
+            prompt_answer = await get_or_load_model(model_id)
 
             # print("saved_model-->",saved_model)
 
-            return prompt_answer
+            return str(prompt_answer)
     
     @router.post("/prompt", summary="Generate an AI response based on a given model and prompt", description="This endpoint takes a model ID and a user prompt, processes it, and returns a response.")
     async def prompt_answer(request: PromptRequest ):

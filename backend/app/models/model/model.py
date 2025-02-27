@@ -49,6 +49,15 @@ huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 
 async_processor = AsyncProcessor()  # Create an instance
 device_os = OSFactory()
 
+# Global variables for model and tokenizer
+model = None
+tokenizer = None
+text_generator = None
+
+# Store loaded models in a dictionary
+loaded_models = {}
+
+
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
 # 🔹 Synchronous function to handle download & progress
@@ -674,11 +683,33 @@ def get_snapshot_path(base_dir):
     return snapshot_folders[0]
 
 
-async def load_model_from_db(model_id: str, prompt: str):
+async def get_or_load_model(model_id: str):
+    """Retrieve model from memory, or load it if not already loaded."""
+    try:
+
+        print("loaded_models",loaded_models)
+        if model_id in loaded_models:
+            print(f"✅ Model {model_id} already loaded.")
+            return loaded_models[model_id]
+
+        # Fetch model path from the database
+        model_path = await load_model_from_db(model_id)
+        if not model_path:
+            return None
+
+        # Load the model
+        return await load_model(model_id, model_path)
+    except Exception as e:
+        print(f"❌ Error in get_or_load_model: {str(e)}")
+        return None
+
+
+async def load_model_from_db(model_id: str):
+    """Fetch model path from the database."""
     try:
         async with async_session_maker() as db:
-            print("model_id -->", model_id)
-            result = await db.execute(select(Model).where(Model.model_name == model_id))
+            print("🔍 Fetching model path for:", model_id)
+            result = await db.execute(select(Model).where(Model.model_id == model_id))
             model_entry = result.scalars().first()
 
             if not model_entry:
@@ -686,33 +717,44 @@ async def load_model_from_db(model_id: str, prompt: str):
                 return None
 
             model_path = get_snapshot_path(model_entry.path)
-            print(f"📂 Loading model from: {model_path}")
+            print(f"📂 Found model path: {model_path}")
 
-            # Use MPS if available, otherwise fallback to CPU
-            device = "mps" if torch.backends.mps.is_available() else "cpu"
+            return model_path
+    except Exception as e:
+        print(f"❌ Error fetching model {model_id}: {str(e)}")
+        return None
 
-            text_generator = pipeline(
-                "text-generation",
-                model=model_path,
-                trust_remote_code=True,
-                # Set device index (0 for MPS, -1 for CPU)
-                device=0 if device == "mps" else -1,
-                torch_dtype=torch.float16 if device == "mps" else "auto"
-            )
 
-            text = prompt
-            generated_text = text_generator(
-                text, max_length=200, do_sample=True, top_k=50, top_p=0.95, truncation=True)
+async def load_model(model_id: str, model_path: str):
+    """Loads the model into memory and stores it in a dictionary."""
+    try:
+        if model_id in loaded_models:
+            print(f"✅ Model {model_id} already loaded.")
+            return loaded_models[model_id]
 
-            output_text = re.sub(
-                r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>", output_text)
+        device = str(device_os.check_pytorch_device())
+        print(f"📂 Loading model {model_id} from {model_path} on {device}...")
 
-            print(
-                f"✅ Successfully loaded model: {model_id} on {device.upper()}")
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
+            trust_remote_code=False
+        )
 
-            return output_text
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
+        
+        model.to(device)
 
+        text_generator = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            device_map="auto"
+        )
+
+        loaded_models[model_id] = text_generator  # Store generator in cache
+        print(f"✅ Model {model_id} is ready!")
+        return text_generator
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
