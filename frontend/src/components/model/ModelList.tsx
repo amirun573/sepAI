@@ -9,9 +9,14 @@ interface ModelListProps {
     onModelChange: (modelId: number) => void;
 }
 
+
+
 const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
     const [selectedModelIndex, setSelectedModelIndex] = useState<number>(-1);
     const [modelSavedLists, setModelSavedLists] = useState<APIModelListsResponse[]>([]);
+    const [loading, setLoading] = useState<boolean>(false);
+
+
 
     const loadModel = async () => {
         try {
@@ -27,15 +32,47 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
         }
     };
 
+    const handleLoadModel = async (index: number) => {
+        setLoading(true);
+        try {
+
+            if (selectedModelIndex !== -1) {
+                const responseLoadModel = await API({
+                    url: `models/load_model?model_id=${index}`,
+                    API_Code: APICode.load_model,
+                });
+
+                if (!responseLoadModel.success) {
+                    throw new Error(responseLoadModel?.message || "Failed to Load Model");
+                }
+            }
+
+        } catch (error: any) {
+            alert(error?.message || "Error At Fetch History");
+        } finally {
+            setLoading(false);
+        }
+    }
+
     useEffect(() => {
         loadModel();
     }, []);
 
-    const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const index = Number(e.target.value);
-        setSelectedModelIndex(index);
-        onModelChange(modelSavedLists[index]?.model_id); // Pass model_id to parent
+    const handleModelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selectedModelId = Number(e.target.value);
+        setSelectedModelIndex(selectedModelId);
+        await handleLoadModel(selectedModelId);
+
+        console.log("selectedModelId", selectedModelId);
+
+        // ✅ Find the correct model using model_id instead of array index
+        const selectedModel = modelSavedLists.find(model => model.model_id === selectedModelId);
+
+        if (selectedModel) {
+            onModelChange(selectedModel.model_id); // Pass the correct model_id
+        }
     };
+
 
     return (
         <>
@@ -49,7 +86,7 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
                         {'Select Model'}
                     </option>
                     {modelSavedLists.map((model, index) => (
-                        <option key={model.model_id} value={index}>
+                        <option key={model.model_id} value={model.model_id}>
                             {model.model_name}
                         </option>
                     ))}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ModelList from "./model/ModelList";
 import API from "@/_Common/function/api";
 import { APICode } from "@/_Common/enum/api-code.enum";
@@ -15,7 +15,8 @@ const Prompt = ({ onSendMessage }: { onSendMessage: (data: APIChatHistoryRespons
         setError("");
 
         try {
-            if (!prompt.trim() || selectedModelId < 0) {
+
+            if (!prompt.trim() || (selectedModelId < 0 || selectedModelId === undefined)) {
                 throw new Error("Please enter a prompt and select a model.");
             }
 
@@ -58,6 +59,8 @@ const Prompt = ({ onSendMessage }: { onSendMessage: (data: APIChatHistoryRespons
             setPrompt(""); // Clear input after submission
         }
     };
+
+    
 
     return (
         <div className="bg-white p-6 rounded-lg shadow-md">

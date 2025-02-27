@@ -154,6 +154,7 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
           throw new Error("Not Getting Any Models");
         }
 
+        console.log("Data", modelLists.data);
         response = {
           success: true,
           status: modelLists.status,
@@ -174,6 +175,22 @@ const API = async (object: APIInterface): Promise<APIResponse> => {
           success: true,
           status: chatHistory.status,
           data: chatHistory.data,
+        };
+
+        break;
+      }
+
+      case APICode.load_model: {
+        const loadModel = await axios.get(fullURL);
+
+        if (!loadModel) {
+          throw new Error("Failed To Load Model");
+        }
+
+        response = {
+          success: true,
+          status: loadModel.status,
+          data: loadModel.data,
         };
 
         break;

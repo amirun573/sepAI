@@ -764,65 +764,51 @@ async def prompt(model_id: int, prompt: str):
     return await _async_prompt(model_id, prompt)
 
 
-async def _async_prompt(model_id: int, prompt: str):
+async def _async_prompt(model_id: str, prompt: str):
     try:
-        async with async_session_maker() as db:
-            print("model_id -->", model_id)
-            result = await db.execute(select(Model).where(Model.model_id == model_id))
-            model_entry = result.scalars().first()
 
-            if not model_entry:
-                print(f"❌ Model {model_id} not found in the database.")
-                return None
+        print("loaded_models",loaded_models)
+        # ✅ Check if model is already in memory
+        if model_id in loaded_models:
+            print(f"✅ Using cached model {model_id}.")
+            text_generator = loaded_models[model_id]  # Directly use the pipeline
+        else:
+            # ✅ Load model if not in memory
+            async with async_session_maker() as db:
+                print("🔍 Fetching model_id -->", model_id)
+                result = await db.execute(select(Model).where(Model.model_id == model_id))
+                model_entry = result.scalars().first()
 
-            model_path = get_snapshot_path(model_entry.path)
-            print(f"📂 Loading model from: {model_path}")
+                if not model_entry:
+                    print(f"❌ Model {model_id} not found in the database.")
+                    return None
+
+                model_path = get_snapshot_path(model_entry.path)
+                print(f"📂 Loading model from: {model_path}")
+
+                # ✅ Use cached model loading function
+                text_generator = await load_model(model_id, model_path)
+                if not text_generator:
+                    return None  # ❌ Failed to load model
 
 
+        print("Start Generate Text")
 
-            # Use MPS if available, otherwise fallback to CPU
-            device = str(device_os.check_pytorch_device())
-            print("Device-->", device)
-            print(
-                f"✅ Successfully loaded model: {model_id} on {device.upper()}")
-            model = AutoModelForCausalLM.from_pretrained(
-                model_path,
-                # device=0 if device == "mps" else -1,  # Set device index (0 for MPS, -1 for CPU)
-                torch_dtype=torch.float16 if device in [
-                    "mps", "cuda"] else "auto",
-                trust_remote_code=True,
-                
-            )
+        # ✅ Generate text using cached pipeline
+        generated_text = text_generator(prompt,
+                                        max_length=100,
+                                        do_sample=True,
+                                        top_k=50,
+                                        top_p=0.95,
+                                        truncation=True,
+                                        repetition_penalty=1.2)
 
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+        # ✅ Fix: Properly extract the generated text
+        output_text = generated_text[0]["generated_text"].strip()
 
-            model = torch.compile(model)  # Compile for optimization
-            model.to(device)
-            
-
-            text_generator = pipeline(
-                "text-generation",
-                model=model,
-                tokenizer= tokenizer,
-                trust_remote_code=True,
-                device_map = "auto"
-            )
-
-            text = prompt
-            generated_text = text_generator(text,
-                                            max_length=100,
-                                            do_sample=True,
-                                            top_k=50,
-                                            top_p=0.95,
-                                            truncation=True,
-                                            repetition_penalty=1.2)
-
-            output_text = re.sub(
-                r'\s+', ' ', generated_text[0]["generated_text"]).strip()
-            print("output_text==>", output_text)
-
-            return output_text
+        print("output_text ==>", output_text)
+        return output_text
 
     except Exception as e:
-        print(f"❌ Error loading model {model_id}: {str(e)}")
+        print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return None
