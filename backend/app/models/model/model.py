@@ -28,7 +28,8 @@ from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
 import huggingface_hub
 import glob
 import re
-
+from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+from functools import partial
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -57,6 +58,7 @@ text_generator = None
 # Store loaded models in a dictionary
 loaded_models = {}
 
+semaphore = asyncio.Semaphore(4)
 
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
@@ -686,23 +688,70 @@ def get_snapshot_path(base_dir):
 async def get_or_load_model(model_id: str):
     """Retrieve model from memory, or load it if not already loaded."""
     try:
-
-        print("loaded_models",loaded_models)
+        print("loaded_models", loaded_models)
         if model_id in loaded_models:
             print(f"✅ Model {model_id} already loaded.")
             return loaded_models[model_id]
 
-        # Fetch model path from the database
-        model_path = await load_model_from_db(model_id)
-        if not model_path:
+        # Offload the model loading process to a separate thread
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            text_generator = await loop.run_in_executor(
+                pool,
+                partial(_load_model_off_thread, model_id)
+            )
+
+        if text_generator:
+            loaded_models[model_id] = text_generator  # Cache the model
+            return text_generator
+        else:
             return None
 
-        # Load the model
-        return await load_model(model_id, model_path)
     except Exception as e:
         print(f"❌ Error in get_or_load_model: {str(e)}")
         return None
+def _load_model_off_thread(model_id: str):
+    """Helper function to load the model in a separate thread."""
+    try:
+        # Fetch model path from the database (blocking operation)
+        model_path = asyncio.run(load_model_from_db(model_id))
+        if not model_path:
+            return None
 
+        # Load the model (blocking operation)
+        return _load_model_sync(model_id, model_path)
+    except Exception as e:
+        print(f"❌ Error in _load_model_off_thread: {str(e)}")
+        return None
+
+def _load_model_sync(model_id: str, model_path: str):
+    """Synchronous function to load the model."""
+    try:
+        device = str(device_os.check_pytorch_device())
+        print(f"📂 Loading model {model_id} from {model_path} on {device}...")
+
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
+            trust_remote_code=False
+        )
+
+        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
+        
+        model.to(device)
+
+        text_generator = pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=tokenizer,
+            device_map="auto"
+        )
+
+        print(f"✅ Model {model_id} is ready!")
+        return text_generator
+    except Exception as e:
+        print(f"❌ Error loading model {model_id}: {str(e)}")
+        return None
 
 async def load_model_from_db(model_id: str):
     """Fetch model path from the database."""
@@ -766,14 +815,14 @@ async def prompt(model_id: int, prompt: str):
 
 async def _async_prompt(model_id: str, prompt: str):
     try:
+        print("loaded_models", loaded_models)
 
-        print("loaded_models",loaded_models)
-        # ✅ Check if model is already in memory
+        # ✅ Check if model is in memory
         if model_id in loaded_models:
             print(f"✅ Using cached model {model_id}.")
             text_generator = loaded_models[model_id]  # Directly use the pipeline
         else:
-            # ✅ Load model if not in memory
+            # ✅ Load model from database
             async with async_session_maker() as db:
                 print("🔍 Fetching model_id -->", model_id)
                 result = await db.execute(select(Model).where(Model.model_id == model_id))
@@ -781,7 +830,7 @@ async def _async_prompt(model_id: str, prompt: str):
 
                 if not model_entry:
                     print(f"❌ Model {model_id} not found in the database.")
-                    return None
+                    return "Model not found"
 
                 model_path = get_snapshot_path(model_entry.path)
                 print(f"📂 Loading model from: {model_path}")
@@ -789,26 +838,45 @@ async def _async_prompt(model_id: str, prompt: str):
                 # ✅ Use cached model loading function
                 text_generator = await load_model(model_id, model_path)
                 if not text_generator:
-                    return None  # ❌ Failed to load model
+                    return "Failed to load model"
 
+        print("🚀 Start Generate Text")
 
-        print("Start Generate Text")
+        # ✅ Ensure we are getting the correct event loop
+        loop = asyncio.get_running_loop()
 
-        # ✅ Generate text using cached pipeline
-        generated_text = text_generator(prompt,
-                                        max_length=100,
-                                        do_sample=True,
-                                        top_k=50,
-                                        top_p=0.95,
-                                        truncation=True,
-                                        repetition_penalty=1.2)
+        # ✅ Run _generate_text in ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            generated_text = await loop.run_in_executor(
+                pool,
+                partial(_generate_text, text_generator, prompt)
+            )
 
-        # ✅ Fix: Properly extract the generated text
-        output_text = generated_text[0]["generated_text"].strip()
+        print("✅ Generated Text:", generated_text)
 
-        print("output_text ==>", output_text)
-        return output_text
+        # ✅ Return generated text to FastAPI response
+        return generated_text
 
     except Exception as e:
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
+        return f"Error generating response: {str(e)}"
+        
+def _generate_text(text_generator, prompt):
+    try:
+        print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log
+        generated_text = text_generator(
+            prompt,
+            max_length=100,
+            do_sample=True,
+            top_k=50,
+            top_p=0.95,
+            truncation=True,
+            repetition_penalty=1.2,
+        )
+        print("✅ _generate_text output:", generated_text)  # ✅ Debugging log
+
+        # ✅ Ensure proper format
+        return generated_text[0]["generated_text"].strip() if generated_text else None
+    except Exception as e:
+        print(f"❌ Error in _generate_text: {e}")
         return None
