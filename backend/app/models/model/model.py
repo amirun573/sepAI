@@ -30,6 +30,8 @@ import glob
 import re
 from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
 from functools import partial
+import gc
+from collections import OrderedDict
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -41,7 +43,9 @@ running_tasks = {}
 executor = concurrent.futures.ThreadPoolExecutor(
     max_workers=3)  # Limit concurrent downloads
 
-
+# ✅ Limit cache size to avoid memory overflow
+MAX_CACHE_SIZE = 3
+loaded_models = OrderedDict()
 # Initialize the API
 api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
@@ -59,6 +63,7 @@ text_generator = None
 loaded_models = {}
 
 semaphore = asyncio.Semaphore(4)
+thread_pool = ThreadPoolExecutor(max_workers=2)
 
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
@@ -817,12 +822,18 @@ async def _async_prompt(model_id: str, prompt: str):
     try:
         print("loaded_models", loaded_models)
 
-        # ✅ Check if model is in memory
+        # ✅ Remove least used model if cache exceeds limit
+        if model_id not in loaded_models and len(loaded_models) >= MAX_CACHE_SIZE:
+            removed_model_id, removed_model = loaded_models.popitem(last=False)
+            del removed_model  # ✅ Explicitly delete the model
+            gc.collect()  # ✅ Force garbage collection
+            print(f"🗑️ Removed cached model {removed_model_id} to free memory.")
+
+        # ✅ Check if model is already loaded
         if model_id in loaded_models:
             print(f"✅ Using cached model {model_id}.")
-            text_generator = loaded_models[model_id]  # Directly use the pipeline
+            text_generator = loaded_models[model_id]
         else:
-            # ✅ Load model from database
             async with async_session_maker() as db:
                 print("🔍 Fetching model_id -->", model_id)
                 result = await db.execute(select(Model).where(Model.model_id == model_id))
@@ -835,32 +846,31 @@ async def _async_prompt(model_id: str, prompt: str):
                 model_path = get_snapshot_path(model_entry.path)
                 print(f"📂 Loading model from: {model_path}")
 
-                # ✅ Use cached model loading function
                 text_generator = await load_model(model_id, model_path)
                 if not text_generator:
                     return "Failed to load model"
 
+                # ✅ Store model in cache
+                loaded_models[model_id] = text_generator
+
         print("🚀 Start Generate Text")
 
-        # ✅ Ensure we are getting the correct event loop
+         # ✅ Ensure we are getting the correct event loop
         loop = asyncio.get_running_loop()
 
-        # ✅ Run _generate_text in ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        # ✅ Run _generate_text in ThreadPoolExecutor (with memory cleanup)
+        with ThreadPoolExecutor(max_workers=2) as pool:
             generated_text = await loop.run_in_executor(
                 pool,
                 partial(_generate_text, text_generator, prompt)
             )
 
         print("✅ Generated Text:", generated_text)
-
-        # ✅ Return generated text to FastAPI response
         return generated_text
 
     except Exception as e:
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return f"Error generating response: {str(e)}"
-        
 def _generate_text(text_generator, prompt):
     try:
         print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log
