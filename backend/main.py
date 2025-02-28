@@ -31,5 +31,5 @@ def run_server():
 
 if __name__ == "__main__":
     # Use multiprocessing to avoid PyInstaller restart issue
-    # multiprocessing.freeze_support()
+    multiprocessing.freeze_support()
     run_server()

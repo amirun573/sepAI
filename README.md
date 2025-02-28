@@ -14,6 +14,11 @@ Prerequisites
 3. `source venv/bin/activate`
 4.  `uvicorn main:app --reload`/ `venv/bin/python -m uvicorn main:app --reload`
 
+# Convert Python to Executable file
+1. Ensure to run in enviroment.
+2. run `pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --onedir main.py`
+3. Executable file will be in dist/main
+
 For Alambic migration. Can run
 1. `alembic revision --autogenerate -m "{message}"`
 2. Then, run `alembic upgrade head`
