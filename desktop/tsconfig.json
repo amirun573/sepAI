@@ -1,0 +1,20 @@
+{
+    "compilerOptions": {
+      "target": "ESNext",
+      "module": "ESNext",
+      "jsx": "preserve",
+      "strict": true,
+      "moduleResolution": "node",
+      "resolveJsonModule": true,
+      "isolatedModules": true,
+      "esModuleInterop": true,
+      "baseUrl": "./",
+      "paths": {
+        "@frontend/*": ["src/*"],   // ✅ Fix this alias
+        "@/*": ["src/*"]            // ✅ Keep this correct alias
+      }
+    },
+    "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "renderer/next.config.js"],
+    "exclude": ["node_modules"]
+  }
+  
