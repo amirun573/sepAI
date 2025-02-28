@@ -858,14 +858,23 @@ async def _async_prompt(model_id: str, prompt: str):
          # ✅ Ensure we are getting the correct event loop
         loop = asyncio.get_running_loop()
 
-        # ✅ Run _generate_text in ThreadPoolExecutor (with memory cleanup)
+        # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
+       # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
         with ThreadPoolExecutor(max_workers=2) as pool:
             generated_text = await loop.run_in_executor(
                 pool,
                 partial(_generate_text, text_generator, prompt)
             )
+            pool.shutdown(wait=True)  # ✅ Properly close threads after execution
 
         print("✅ Generated Text:", generated_text)
+
+        # ✅ Force garbage collection to prevent memory leaks
+        gc.collect()
+
+        # ✅ Check & Kill Zombie Processes
+        #async_processor._cleanup_processes()
+
         return generated_text
 
     except Exception as e:
