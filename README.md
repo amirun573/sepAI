@@ -4,7 +4,7 @@ Open Source to pick your favourite AI Model.
 
 # Getting Started
 Prerequisites
-1. Python 3.8+ (for Backend)
+1. Python 3.9+ (for Backend)
 
 2. Node.js 16+ (for Frontend)
 
