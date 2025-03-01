@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "nextron",
     "build-next": "next build renderer",
-    "build": "nextron build",  
+    "build": "nextron build",
     "postinstall": "electron-builder install-app-deps",
     "dev-next": "next dev renderer -p 3000",
     "start-next": "next start renderer -p 3000",
@@ -48,6 +48,7 @@
     "react": "^18",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18",
+    "react-responsive": "^10.0.0",
     "sharp": "^0.33.5",
     "winston": "^3.14.2",
     "winston-daily-rotate-file": "^5.0.0",
