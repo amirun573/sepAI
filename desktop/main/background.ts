@@ -6,8 +6,13 @@ import { spawn } from 'child_process';
 import os from 'os';
 
 const isProd = process.env.NODE_ENV === 'production';
+// Define a cross-platform relative executable path
+let exePath = path.join(__dirname, '../../backend/dist/main/main' + (os.platform() === 'win32' ? '.exe' : ''));
+
 
 if (isProd) {
+  exePath = path.join(__dirname, './main' + (os.platform() === 'win32' ? '.exe' : ''));
+
   serve({ directory: 'app' });
 } else {
   app.setPath('userData', `${app.getPath('userData')} (development)`);
@@ -15,8 +20,7 @@ if (isProd) {
 
 let childProcess = null; // Store the child process reference
 
-// Define a cross-platform relative executable path
-// const exePath = path.join(__dirname, '../../backend/dist/main/main' + (os.platform() === 'win32' ? '.exe' : ''));
+
 
 // Function to execute the process and store its reference
 function executeCommand(command) {
@@ -53,16 +57,16 @@ function executeCommand(command) {
   }
 
   // 🟢 Run the correct executable based on OS
-  // executeCommand(exePath);
+  executeCommand(exePath);
 })();
 
-// Kill child process when the app quits
-// app.on('before-quit', () => {
-//   if (childProcess) {
-//     console.log('Killing subprocess...');
-//     childProcess.kill('SIGTERM'); // Send termination signal
-//   }
-// });
+//Kill child process when the app quits
+app.on('before-quit', () => {
+  if (childProcess) {
+    console.log('Killing subprocess...');
+    childProcess.kill('SIGTERM'); // Send termination signal
+  }
+});
 
 app.on('window-all-closed', () => {
   app.quit();
