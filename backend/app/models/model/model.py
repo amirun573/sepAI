@@ -823,16 +823,16 @@ async def _async_prompt(model_id: int, prompt: str):
         print("loaded_models", loaded_models)
 
         # ✅ Remove least used model if cache exceeds limit
-        if model_id not in loaded_models and len(loaded_models) >= MAX_CACHE_SIZE:
+        if str(model_id) not in loaded_models and len(loaded_models) >= MAX_CACHE_SIZE:
             removed_model_id, removed_model = loaded_models.popitem(last=False)
             del removed_model  # ✅ Explicitly delete the model
             gc.collect()  # ✅ Force garbage collection
             print(f"🗑️ Removed cached model {removed_model_id} to free memory.")
 
         # ✅ Check if model is already loaded
-        if model_id in loaded_models:
+        if str(model_id) in loaded_models:
             print(f"✅ Using cached model {model_id}.")
-            text_generator = loaded_models[model_id]
+            text_generator = loaded_models[str(model_id)]
         else:
             async with async_session_maker() as db:
                 print("🔍 Fetching model_id -->", model_id)
@@ -865,7 +865,7 @@ async def _async_prompt(model_id: int, prompt: str):
             future = loop.run_in_executor(pool, partial(_generate_text, text_generator, prompt))
             
             try:
-                generated_text = await asyncio.wait_for(future, timeout=1000)  # Set timeout
+                generated_text = await asyncio.wait_for(future, timeout=100)  # Set timeout
             except asyncio.TimeoutError:
                 print("❌ _generate_text timed out!")
                 return "Timeout error"
@@ -884,8 +884,8 @@ async def _async_prompt(model_id: int, prompt: str):
 
         print("✅ Generated Text:", generated_text)
 
-        # ✅ Force garbage collection to prevent memory leaks
-        gc.collect()
+        # # ✅ Force garbage collection to prevent memory leaks
+        # gc.collect()
 
         # ✅ Check & Kill Zombie Processes
         #async_processor._cleanup_processes()
