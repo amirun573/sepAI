@@ -45,8 +45,8 @@ executor = concurrent.futures.ThreadPoolExecutor(
 
 # ✅ Limit cache size to avoid memory overflow
 MAX_CACHE_SIZE = 3
-loaded_models = OrderedDict()
-# Initialize the API
+MAX_MODELS = 1  # Set a limit on cached models
+loaded_models = OrderedDict()# Initialize the API
 api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
@@ -691,45 +691,78 @@ def get_snapshot_path(base_dir):
 
 
 async def get_or_load_model(model_id: int):
-    """Retrieve model from memory, or load it if not already loaded."""
+    """Retrieve model from memory or load it with a maximum cache size."""
     try:
-        print("loaded_models", loaded_models)
+        print("🔍 Checking loaded models:", loaded_models.keys())
+
+        # ✅ Check if model is already loaded
         if model_id in loaded_models:
-            print(f"✅ Model {model_id} already loaded.")
+            print(f"✅ Model {model_id} already loaded. Moving to most recent.")
+            loaded_models.move_to_end(model_id)  # Move accessed model to the end (most recently used)
             return loaded_models[model_id]
 
-        # Offload the model loading process to a separate thread
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as pool:
-            text_generator = await loop.run_in_executor(
-                pool,
-                partial(_load_model_off_thread, model_id)
-            )
+        loop = asyncio.get_running_loop()
 
-        if text_generator:
-            loaded_models[model_id] = text_generator  # Cache the model
-            return text_generator
-        else:
+        # ✅ Fetch model path asynchronously before switching to threads
+        model_path = await load_model_from_db(model_id)
+        if not model_path:
+            print(f"❌ Model {model_id} not found in DB.")
             return None
 
+        # ✅ Load the model off-thread
+        future = loop.run_in_executor(executor, partial(_load_model_sync, model_id, model_path))
+        text_generator = await asyncio.wait_for(future, timeout=100)  # ✅ Set timeout
+
+        if text_generator:
+            # ✅ Ensure memory limit is respected (evict oldest model if needed)
+            if len(loaded_models) >= MAX_MODELS:
+                oldest_model_id, _ = loaded_models.popitem(last=False)  # Remove the oldest (LRU)
+                print(f"🗑️ Removing oldest model {oldest_model_id} to free memory...")
+                unload_model(oldest_model_id)  # ✅ Properly unload model from memory
+
+            # ✅ Cache new model
+            loaded_models[model_id] = text_generator
+            print(f"🚀 Model {model_id} loaded successfully.")
+            return text_generator
+        else:
+            print(f"⚠️ Model {model_id} failed to load.")
+            return None
+
+    except asyncio.TimeoutError:
+        print(f"❌ Loading model {model_id} timed out!")
+        return None
     except Exception as e:
         print(f"❌ Error in get_or_load_model: {str(e)}")
         return None
-def _load_model_off_thread(model_id: int):
-    """Helper function to load the model in a separate thread."""
-    try:
-        # Fetch model path from the database (blocking operation)
-        model_path = asyncio.run(load_model_from_db(model_id))
-        if not model_path:
-            return None
+    finally:
+        # ✅ Clean up memory to prevent leaks
+        gc.collect()
+        device_os.clear_pytorch_cache()
 
-        # Load the model (blocking operation)
-        return _load_model_sync(model_id, model_path)
-    except Exception as e:
-        print(f"❌ Error in _load_model_off_thread: {str(e)}")
-        return None
+def unload_model(model_id: int):
+    """Unload a specific model from memory to free RAM."""
+    if model_id in loaded_models:
+        print(f"🗑️ Unloading model {model_id}...")
+        del loaded_models[model_id]
+        torch.cuda.empty_cache()
+        gc.collect()
 
-def _load_model_sync(model_id: str, model_path: str):
+
+# def _load_model_off_thread(model_id: int):
+#     """Helper function to load the model in a separate thread."""
+#     try:
+#         # Fetch model path from the database (blocking operation)
+#         model_path = asyncio.run(load_model_from_db(model_id))
+#         if not model_path:
+#             return None
+
+#         # Load the model (blocking operation)
+#         return _load_model_sync(model_id, model_path)
+#     except Exception as e:
+#         print(f"❌ Error in _load_model_off_thread: {str(e)}")
+#         return None
+
+def _load_model_sync(model_id: int, model_path: str):
     """Synchronous function to load the model."""
     try:
         device = str(device_os.check_pytorch_device())
@@ -758,7 +791,7 @@ def _load_model_sync(model_id: str, model_path: str):
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
 
-async def load_model_from_db(model_id: str):
+async def load_model_from_db(model_id: int):
     """Fetch model path from the database."""
     try:
         async with async_session_maker() as db:
@@ -779,7 +812,7 @@ async def load_model_from_db(model_id: str):
         return None
 
 
-async def load_model(model_id: str, model_path: str):
+async def load_model(model_id: int, model_path: str):
     """Loads the model into memory and stores it in a dictionary."""
     try:
         if model_id in loaded_models:
@@ -846,7 +879,7 @@ async def _async_prompt(model_id: int, prompt: str):
                 model_path = get_snapshot_path(model_entry.path)
                 print(f"📂 Loading model from: {model_path}")
 
-                text_generator = await load_model(model_id, model_path)
+                text_generator = await get_or_load_model(model_id)
                 if not text_generator:
                     return "Failed to load model"
 
