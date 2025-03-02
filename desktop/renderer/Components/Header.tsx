@@ -1,10 +1,11 @@
 import React from "react";
+import RouteHistoryManager from "./Navigation";
 
 const Header = () => {
     return (
         <>
+        <RouteHistoryManager/>
             <header className="flex justify-between items-center mb-8">
-                <h1 className="text-2xl font-bold text-gray-800">Welcome Back, User!</h1>
                 {/* <div className="relative">
                     <button className="flex items-center text-gray-800 hover:text-gray-600">
                         <img

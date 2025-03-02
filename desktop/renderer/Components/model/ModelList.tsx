@@ -83,7 +83,7 @@ const ModelList: React.FC<ModelListProps> = ({ onModelChange }) => {
         <>
             {modelSavedLists.length > 0 ? (
                 <select
-                    className="ml-4 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-black"
+                    className="ml-4 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-blue-500"
                     value={selectedModelIndex}
                     onChange={handleModelChange}
                 >
