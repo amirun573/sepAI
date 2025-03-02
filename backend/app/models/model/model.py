@@ -690,7 +690,7 @@ def get_snapshot_path(base_dir):
     return snapshot_folders[0]
 
 
-async def get_or_load_model(model_id: str):
+async def get_or_load_model(model_id: int):
     """Retrieve model from memory, or load it if not already loaded."""
     try:
         print("loaded_models", loaded_models)
@@ -715,7 +715,7 @@ async def get_or_load_model(model_id: str):
     except Exception as e:
         print(f"❌ Error in get_or_load_model: {str(e)}")
         return None
-def _load_model_off_thread(model_id: str):
+def _load_model_off_thread(model_id: int):
     """Helper function to load the model in a separate thread."""
     try:
         # Fetch model path from the database (blocking operation)
@@ -818,7 +818,7 @@ async def prompt(model_id: int, prompt: str):
     return await _async_prompt(model_id, prompt)
 
 
-async def _async_prompt(model_id: str, prompt: str):
+async def _async_prompt(model_id: int, prompt: str):
     try:
         print("loaded_models", loaded_models)
 
@@ -860,12 +860,27 @@ async def _async_prompt(model_id: str, prompt: str):
 
         # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
        # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
+        
         with ThreadPoolExecutor(max_workers=2) as pool:
-            generated_text = await loop.run_in_executor(
-                pool,
-                partial(_generate_text, text_generator, prompt)
-            )
-            pool.shutdown(wait=True)  # ✅ Properly close threads after execution
+            future = loop.run_in_executor(pool, partial(_generate_text, text_generator, prompt))
+            
+            try:
+                generated_text = await asyncio.wait_for(future, timeout=1000)  # Set timeout
+            except asyncio.TimeoutError:
+                print("❌ _generate_text timed out!")
+                return "Timeout error"
+            finally:
+                # ✅ Shutdown ThreadPoolExecutor and clean up
+                pool.shutdown(wait=True)  
+                print("🛑 ThreadPoolExecutor shut down.")
+                # ✅ Force garbage collection to free memory
+                gc.collect()
+                device_os.clear_pytorch_cache()
+
+
+        if generated_text is None:
+            print("❌ No output from _generate_text")
+
 
         print("✅ Generated Text:", generated_text)
 
@@ -880,6 +895,7 @@ async def _async_prompt(model_id: str, prompt: str):
     except Exception as e:
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return f"Error generating response: {str(e)}"
+    
 def _generate_text(text_generator, prompt):
     try:
         print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log

@@ -1,3 +1,4 @@
+import gc
 import platform
 from .windows import WindowsHandler
 from .macos import MacOSHandler
@@ -54,6 +55,34 @@ class OSFactory:
             return torch.cuda.device_count()
         else:
             return 0  # No GPU available
-# Usage
-device_os = OSFactory()
-device = device_os.check_pytorch_device()  # ✅ This will work now
+    def clear_pytorch_cache(self):
+        try:
+                """
+                Clears the PyTorch cache for MPS (Metal) and CUDA to free up GPU memory.
+                """
+                if torch.backends.mps.is_available():
+                    try:
+                        torch.mps.empty_cache()
+                        print("🧹 Cleared MPS (Metal) GPU cache")
+                    except AttributeError:
+                        print("⚠️ MPS cache clearing is not supported in this PyTorch version.")
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()  # Helps reclaim fragmented memory
+
+                    print("🧹 Cleared CUDA GPU cache")
+
+                gc.collect()  # ✅ Force garbage collection to free memory
+                print("🧹 Cleared system memory using garbage collection")
+
+                return True
+
+        except Exception as e:
+            print(f"❌ Error clearing PyTorch cache: {e}")
+            return False
+
+
+# # Usage
+# device_os = OSFactory()
+# device = device_os.check_pytorch_device()  # ✅ This will work now

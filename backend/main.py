@@ -1,9 +1,8 @@
-import asyncio
+from app.models.device.os.factory import OSFactory
 import socketio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from huggingface_hub import snapshot_download
 from app.api.v1.routers import api_router
 from socket_manager import sio
 import multiprocessing
@@ -26,6 +25,9 @@ app.include_router(api_router, prefix="/api/v1")
 app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 def run_server():
+    # Usage
+    device_os = OSFactory()
+    device_os.check_pytorch_device()  # ✅ This will work now
     print("🚀 Starting FastAPI with Socket.IO on ws://localhost:8000")
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
