@@ -2,7 +2,8 @@ import path from 'path';
 import { app, ipcMain } from 'electron';
 import serve from 'electron-serve';
 import { createWindow } from './helpers';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
+import os from 'os';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -12,18 +13,22 @@ if (isProd) {
   app.setPath('userData', `${app.getPath('userData')} (development)`);
 }
 
-// Function to execute a command line process
+let childProcess = null; // Store the child process reference
+
+// Define a cross-platform relative executable path
+const exePath = path.join(__dirname, '../../backend/dist/main/main' + (os.platform() === 'win32' ? '.exe' : ''));
+
+// Function to execute the process and store its reference
 function executeCommand(command) {
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`Error executing command: ${error.message}`);
-      return;
-    }
-    if (stderr) {
-      console.error(`stderr: ${stderr}`);
-      return;
-    }
-    console.log(`stdout: ${stdout}`);
+  childProcess = spawn(command, { shell: true, stdio: 'inherit' });
+
+  childProcess.on('error', (error) => {
+    console.error(`Error executing command: ${error.message}`);
+  });
+
+  childProcess.on('exit', (code, signal) => {
+    console.log(`Child process exited with code ${code} and signal ${signal}`);
+    childProcess = null; // Reset process reference
   });
 }
 
@@ -47,10 +52,17 @@ function executeCommand(command) {
     mainWindow.webContents.openDevTools();
   }
 
-  // 🟢 Run the executable file when the app is ready
-  const exePath = "/Users/amirun573/Sites/Projects/sepAI/backend/dist/main/main"; 
-  executeCommand(`"${exePath}"`);
+  // 🟢 Run the correct executable based on OS
+  executeCommand(exePath);
 })();
+
+// Kill child process when the app quits
+app.on('before-quit', () => {
+  if (childProcess) {
+    console.log('Killing subprocess...');
+    childProcess.kill('SIGTERM'); // Send termination signal
+  }
+});
 
 app.on('window-all-closed', () => {
   app.quit();
@@ -59,4 +71,13 @@ app.on('window-all-closed', () => {
 // IPC to run the command on request
 ipcMain.on('run-command', (event, command) => {
   executeCommand(command);
+});
+
+// IPC to kill the process on request
+ipcMain.on('kill-command', () => {
+  if (childProcess) {
+    console.log('Killing subprocess from IPC...');
+    childProcess.kill('SIGTERM');
+    childProcess = null;
+  }
 });
