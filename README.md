@@ -10,8 +10,8 @@ Prerequisites
 
 # Run FastAPI (Backend)
 1. `cd backend`
-2. `virtualenv venv`
-3. `source venv/bin/activate`
+2. `virtualenv venv` / `python3 -m venv venv`
+3. `source venv/bin/activate` / `.\venv\Scripts\Activate`
 4.  `uvicorn main:app --reload`/ `venv/bin/python -m uvicorn main:app --reload`
 
 # Convert Python to Executable file
