@@ -17,7 +17,10 @@ Prerequisites
 # Convert Python to Executable file
 1. Ensure to run in enviroment.
 2. Run `rm -rf build/ dist/ __pycache__/ main.spec` to clear cache.
-3. Then, run `pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --onedir main.py`
+3. Then, run `pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite \
+  --collect-data torch --collect-data transformers \
+  --copy-metadata fastapi --copy-metadata pydantic --copy-metadata starlette \
+  --onefile --name main main.py`
 4. Executable file will be in dist/main
 
 For Alambic migration. Can run
