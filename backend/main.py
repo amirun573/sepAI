@@ -6,10 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routers import api_router
 from socket_manager import sio
 from database import startup_event
+from contextlib import asynccontextmanager
+
 import multiprocessing
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database and cleanup tasks"""
+    await startup_event()
+    yield  # Everything before yield runs on startup, after yield runs on shutdown
+
 # ✅ Initialize FastAPI
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # ✅ Allow CORS
 app.add_middleware(
@@ -23,10 +32,7 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
-@app.on_event("startup")
-async def on_startup():
-    """Initialize database and migrations on startup."""
-    await startup_event()
+
 
 # ✅ Mount FastAPI with Socket.IO
 app = socketio.ASGIApp(sio, other_asgi_app=app)
@@ -42,7 +48,9 @@ def run_server():
     device_os.check_pytorch_device()  # ✅ This will work now
 
     print("🚀 Starting FastAPI with Socket.IO on ws://localhost:8000")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 
 if __name__ == "__main__":
