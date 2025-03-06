@@ -1,8 +1,8 @@
 "use client";
 
-import { UserDetailsLocalStorage } from "../interface/auth.interface";
+// import { UserDetailsLocalStorage } from "../interface/auth.interface";
 
-export async function SetUserDetailsLocalStoage(data: UserDetailsLocalStorage) {
+export async function SetUserDetailsLocalStoage(data: any) {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("userDetails", JSON.stringify(data));
@@ -33,7 +33,7 @@ export async function HandleUnAuthorized(error: any): Promise<boolean> {
 }
 
 export async function GetLocalStorageDetails(): Promise<
-  UserDetailsLocalStorage | boolean
+  any | boolean
 > {
   try {
     const details = localStorage.getItem("userDetails");
@@ -44,7 +44,7 @@ export async function GetLocalStorageDetails(): Promise<
 
     const userDetailsLocalStorage = JSON.parse(
       details
-    ) as UserDetailsLocalStorage;
+    ) as any;
     return userDetailsLocalStorage;
   } catch (error: any) {
     console.log(error);

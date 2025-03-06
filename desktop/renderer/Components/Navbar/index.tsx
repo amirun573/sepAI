@@ -2,8 +2,6 @@
 import Link from 'next/link';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { RoleList } from '../../_Common/enum/role.enum';
-import { UserDetailsLocalStorage } from '../../_Common/interface/auth.interface';
-import { GetRoleFromId } from '../../_Common/function/Role';
 import { DisplayAlert } from '../../_Common/function/Error';
 import {
   HandleUnAuthorized,
@@ -31,7 +29,7 @@ const Navbar = () => {
     setIsOpen(!isOpen);
   };
 
-  const [userDetails, setUserDetails] = useState<UserDetailsLocalStorage>();
+  const [userDetails, setUserDetails] = useState<any>();
   const [role, setRole] = useState<RoleList>(RoleList.EMPLOYEE);
 
   const [menuList, setMenuList] = useState<NavBarInterface[]>([
@@ -56,7 +54,7 @@ const Navbar = () => {
   };
 
   useEffect(() => {
-    const GetUserDetailsLocalStorage = async (): Promise<UserDetailsLocalStorage | boolean> => {
+    const Getany = async (): Promise<any | boolean> => {
       try {
         return await GetLocalStorageDetails(); // Assuming this returns a Promise
       } catch (error) {
@@ -69,13 +67,13 @@ const Navbar = () => {
     const fetchUserDetails = async () => {
       if (typeof window !== 'undefined') {
         try {
-          const details = await GetUserDetailsLocalStorage();
+          const details = await Getany();
 
           if (!details || typeof details === 'boolean') {
             return;
           }
 
-          // Now it's safe to destructure since 'details' is guaranteed to be UserDetailsLocalStorage
+          // Now it's safe to destructure since 'details' is guaranteed to be any
           const {
             email,
             employee_id,
@@ -87,13 +85,9 @@ const Navbar = () => {
             is_acc_verify,
             currency_code,
             features,
-          }: UserDetailsLocalStorage = details;
+          }: any = details;
 
-          const role = GetRoleFromId(role_id); // This will return RoleList.SUPER_ADMIN, etc.
-
-          if (!role) {
-            throw Error("No Role Detected");
-          }
+         
 
           setUserDetails({
             email, employee_id, accessToken, role_id, uuid, country_code, is_acc_verify, currency_code, refreshToken, features
