@@ -79,7 +79,7 @@ const DeviceStatus = ({ status }: any) => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6">
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800">Device</h3>
-                        <p className="mt-2 text-gray-600">
+                        <div className="mt-2 text-gray-600">
                             {deviceCondition && deviceSpecification ? (
                                 <div>
                                     <p>Powered: {deviceSpecification.name}</p>
@@ -89,12 +89,12 @@ const DeviceStatus = ({ status }: any) => {
                             ) : (
                                 <p>Device condition is unavailable.</p>
                             )}
-                        </p>
+                        </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800">CPU</h3>
-                        <p className="mt-2 text-gray-600">
+                        <div className="mt-2 text-gray-600">
                             {deviceCondition && deviceSpecification ? (
                                 <div>
                                     <p>Powered: {deviceSpecification.cpu}</p>
@@ -105,12 +105,12 @@ const DeviceStatus = ({ status }: any) => {
                             ) : (
                                 <p>Device condition is unavailable.</p>
                             )}
-                        </p>
+                        </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800">RAM</h3>
-                        <p className="mt-2 text-gray-600">
+                        <div className="mt-2 text-gray-600">
                             {deviceCondition && deviceSpecification ? (
                                 <div>
                                     <p>Powered: {deviceSpecification.ram}</p>
@@ -119,23 +119,23 @@ const DeviceStatus = ({ status }: any) => {
                             ) : (
                                 <p>Device condition is unavailable.</p>
                             )}
-                        </p>
+                        </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800">Temperature</h3>
-                        <p className="mt-2 text-gray-600">
+                        <div className="mt-2 text-gray-600">
                             {deviceCondition && deviceSpecification ? (
                                 <p>Usage: {isNaN(deviceCondition.temperature) ? 'N/A' : `${deviceCondition.temperature}°C`}</p>
                             ) : (
                                 <p>Device condition is unavailable.</p>
                             )}
-                        </p>
+                        </div>
                     </div>
 
                     <div className="bg-white p-6 rounded-lg shadow-md">
                         <h3 className="text-xl font-bold text-gray-800">GPU</h3>
-                        <p className="mt-2 text-gray-600">
+                        <div className="mt-2 text-gray-600">
                             {gpuDetails ? (
                                 <div>
                                     <p>Name: {gpuDetails.name || 'N/A'}</p>
@@ -147,7 +147,7 @@ const DeviceStatus = ({ status }: any) => {
                             ) : (
                                 <p>No GPU Detected.</p>
                             )}
-                        </p>
+                        </div>
                     </div>
                 </div>
             )}

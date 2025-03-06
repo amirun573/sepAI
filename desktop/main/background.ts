@@ -27,21 +27,21 @@ function executeCommand(command) {
   childProcess = spawn(command, { shell: true, stdio: 'inherit' });
 
   // ✅ Notify user when process starts
-  dialog.showMessageBox({
-    type: 'info',
-    title: 'Process Started',
-    message: 'The backend service has started successfully!',
-  });
+  // dialog.showMessageBox({
+  //   type: 'info',
+  //   title: 'Process Started',
+  //   message: 'The backend service has started successfully!',
+  // });
 
   childProcess.on('error', (error) => {
     console.error(`Error executing command: ${error.message}`);
 
     // ❌ Notify user on error
-    dialog.showMessageBox({
-      type: 'error',
-      title: 'Backend Error',
-      message: `An error occurred while starting the backend: ${error.message}`,
-    });
+    // dialog.showMessageBox({
+    //   type: 'error',
+    //   title: 'Backend Error',
+    //   message: `An error occurred while starting the backend: ${error.message}`,
+    // });
   });
 
   childProcess.on('exit', (code, signal) => {
@@ -49,11 +49,11 @@ function executeCommand(command) {
     childProcess = null; // Reset process reference
 
     // 🔴 Notify user when process exits
-    dialog.showMessageBox({
-      type: 'warning',
-      title: 'Backend Stopped',
-      message: `The backend process has exited with code ${code}.`,
-    });
+    // dialog.showMessageBox({
+    //   type: 'warning',
+    //   title: 'Backend Stopped',
+    //   message: `The backend process has exited with code ${code}.`,
+    // });
   });
 }
 
