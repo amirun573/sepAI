@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routers import api_router
 from socket_manager import sio
+from database import startup_event
 import multiprocessing
 
 # ✅ Initialize FastAPI
@@ -21,17 +22,33 @@ app.add_middleware(
 
 app.include_router(api_router, prefix="/api/v1")
 
+
+@app.on_event("startup")
+async def on_startup():
+    """Initialize database and migrations on startup."""
+    await startup_event()
+
 # ✅ Mount FastAPI with Socket.IO
 app = socketio.ASGIApp(sio, other_asgi_app=app)
 
+
+
+
+
 def run_server():
-    # Usage
+    """Start FastAPI + Socket.IO Server"""
+    print("🚀 Checking PyTorch device before starting server...")
     device_os = OSFactory()
     device_os.check_pytorch_device()  # ✅ This will work now
+
     print("🚀 Starting FastAPI with Socket.IO on ws://localhost:8000")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+
 
 if __name__ == "__main__":
-    # Use multiprocessing to avoid PyInstaller restart issue
-    multiprocessing.freeze_support()
-    run_server()
+    multiprocessing.freeze_support()  # ✅ Prevents PyInstaller infinite restart issues
+
+    # ✅ Start the server in a separate process
+    server_process = multiprocessing.Process(target=run_server)
+    server_process.start()
+    server_process.join()  # Keeps the process running
