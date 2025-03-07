@@ -34,7 +34,7 @@ const MarketPlace: React.FC = () => {
     });
     const [saveListsModel, setSaveListsModel] = useState<APIGetSaveModelLists[]>([]);
     const [filteredModels, setFilteredModels] = useState<APIHuggingFaceModeListsResponse[]>([]);
-
+    const [loadingDownload, setLoadingDownload] = useState<boolean>(false);
 
     const getModelDownload = async () => {
         try {
@@ -250,187 +250,331 @@ const MarketPlace: React.FC = () => {
     // }, [modelLists, saveListsModel]);
 
     return (
-        <div className="min-h-screen flex bg-gray-100">
-            {/* Sidebar */}
-            <Navbar />
+      <div className="min-h-screen flex bg-gray-100">
+        {/* Sidebar */}
+        <Navbar />
 
-            {/* Main Content */}
-            <main className="flex-1 p-8">
-                {/* Header */}
-                <Header />
+        {/* Main Content */}
+        <main className="flex-1 p-8">
+          {/* Header */}
+          <Header />
 
-                {/* Model List */}
-                <div className="mt-5">
-                    <h2 className="text-xl font-semibold mb-4 text-black">Hugging Face Models</h2>
-                    {filteredModels.length > 0 && (
-                        <>
-                            <h3 className="text-l font-semibold mb-4 text-black">Installed Model</h3>
-                            <ul className="bg-white p-4 rounded-md shadow-md">
-                                {filteredModels.slice(0, visibleCount).map((model: APIHuggingFaceModeListsResponse, index: number) => (
-                                    <li key={index} className="border-b last:border-none py-2 text-black">
-                                        <details
-                                            className="cursor-pointer"
-                                            onToggle={(e) => {
-                                                const isOpen = (e.target as HTMLDetailsElement).open;
-                                                setExpandedModel(isOpen ? model.id : null);
+          {/* Model List */}
+          <div className="mt-5">
+            <h2 className="text-xl font-semibold mb-4 text-black">
+              Hugging Face Models
+            </h2>
+            {filteredModels.length > 0 && (
+              <>
+                <h3 className="text-l font-semibold mb-4 text-black">
+                  Installed Model
+                </h3>
+                <ul className="bg-white p-4 rounded-md shadow-md">
+                  {filteredModels
+                    .slice(0, visibleCount)
+                    .map(
+                      (
+                        model: APIHuggingFaceModeListsResponse,
+                        index: number
+                      ) => (
+                        <li
+                          key={index}
+                          className="border-b last:border-none py-2 text-black"
+                        >
+                          <details
+                            className="cursor-pointer"
+                            onToggle={(e) => {
+                              const isOpen = (e.target as HTMLDetailsElement)
+                                .open;
+                              setExpandedModel(isOpen ? model.id : null);
 
-                                                if (isOpen) {
-                                                    checkModelDownloaded(model.id);
-                                                    mutate(); // Fetch model details
-                                                }
-                                            }}
-                                        >
-                                            <summary className="font-medium">{model.id}</summary>
-                                            <div className="ml-4 mt-2 text-gray-700">
-                                                <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
-                                                <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
-                                                <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
-                                                <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag || "N/A"}</p>
-                                                <p><strong>Trending Score:</strong> {model.trendingScore || "N/A"}</p>
-                                                <p><strong>Model Size:</strong> {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
+                              if (isOpen) {
+                                checkModelDownloaded(model.id);
+                                mutate(); // Fetch model details
+                              }
+                            }}
+                          >
+                            <summary className="font-medium">
+                              {model.id}
+                            </summary>
+                            <div className="ml-4 mt-2 text-gray-700">
+                              <p>
+                                <strong>Downloads:</strong>{' '}
+                                {model.downloads || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Library:</strong>{' '}
+                                {model.library_name || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Likes:</strong> {model.likes || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Pipeline Tag:</strong>{' '}
+                                {model?.pipeline_tag || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Trending Score:</strong>{' '}
+                                {model.trendingScore || 'N/A'}
+                              </p>
+                              <p>
+                                <strong>Model Size:</strong>{' '}
+                                {model.size
+                                  ? `${model.size.size} ${model.size.unit}`
+                                  : 'Loading...'}
+                              </p>
 
-                                                <p><strong>Tags:</strong> </p>
-                                                <div className="flex flex-wrap gap-2 mb-4 mt-2">
-                                                    {model.tags?.length ? (
-                                                        model.tags.map((tag: string, index: number) => (
-                                                            <span
-                                                                key={index}
-                                                                className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
-                                                            >
-                                                                {tag}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-sm text-gray-500">N/A</span>
-                                                    )}
-                                                </div>
+                              <p>
+                                <strong>Tags:</strong>{' '}
+                              </p>
+                              <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                {model.tags?.length ? (
+                                  model.tags.map(
+                                    (tag: string, index: number) => (
+                                      <span
+                                        key={index}
+                                        className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
+                                      >
+                                        {tag}
+                                      </span>
+                                    )
+                                  )
+                                ) : (
+                                  <span className="text-sm text-gray-500">
+                                    N/A
+                                  </span>
+                                )}
+                              </div>
 
-                                                {model.downloaded ? (
-                                                    <div className="mt-4 flex space-x-2 justify-end">
-                                                        <button
-                                                            key={`update-${model.id}`}
-                                                            onClick={() => handleDownloadModel(model.id || "")}
-                                                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
-                                                        >
-                                                            Update
-                                                        </button>
-                                                        <button
-                                                            key={`delete-${model.id}`}
-                                                            onClick={() => handleDeleteModel(model.id || "")}
-                                                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                                                        >
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                ) : (
-                                                    <button
-                                                        key={model.id}
-                                                        onClick={() => handleDownloadModel(model.id || "")}
-                                                        className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                                    >
-                                                        Download {model.id}
-                                                    </button>
-                                                )}
-
-                                                {progress && Object.keys(progress).length > 0 && (
-                                                    <div>
-                                                        {Object.entries(progress).map(([modelId, prog]) => (
-                                                            <p key={modelId}>Model {modelId} Progress: {prog}%</p>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                {downloadedModel && <p>Model saved at: {downloadedModel}</p>}
-                                            </div>
-                                        </details>
-                                    </li>
-                                ))}
-                            </ul>
-                        </>
-                    )}
-
-                    <h3 className="text-l font-semibold mb-4 text-black mt-4">Download Model</h3>
-                    <ul className="bg-white p-4 rounded-md shadow-md">
-                        {modelLists?.slice(0, visibleCount).map((model: APIHuggingFaceModeListsResponse, index: number) => (
-                            <li key={index} className="border-b last:border-none py-2 text-black">
-                                <details
-                                    className="cursor-pointer"
-                                    onToggle={(e) => {
-                                        const isOpen = (e.target as HTMLDetailsElement).open;
-                                        setExpandedModel(isOpen ? model.id : null);
-
-                                        if (isOpen) {
-                                            checkModelDownloaded(model.id);
-                                            mutate(); // Fetch model details
-                                        }
-                                    }}
+                              {model.downloaded ? (
+                                <div className="mt-4 flex space-x-2 justify-end">
+                                  <button
+                                    key={`update-${model.id}`}
+                                    onClick={() =>
+                                      handleDownloadModel(model.id || '')
+                                    }
+                                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                                  >
+                                    Update
+                                  </button>
+                                  <button
+                                    key={`delete-${model.id}`}
+                                    onClick={() =>
+                                      handleDeleteModel(model.id || '')
+                                    }
+                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : (
+                                // <button
+                                //     key={model.id}
+                                //     onClick={() => handleDownloadModel(model.id || "")}
+                                //     className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                // >
+                                //     Download {model.id}
+                                // </button>
+                                <button
+                                  className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                  onClick={() =>
+                                    handleDownloadModel(model.id || '')
+                                  }
+                                  disabled={loadingDownload}
                                 >
-                                    <summary className="font-medium">{model.id}</summary>
-                                    <div className="ml-4 mt-2 text-gray-700">
-                                        <p><strong>Downloads:</strong> {model.downloads || "N/A"}</p>
-                                        <p><strong>Library:</strong> {model.library_name || "N/A"}</p>
-                                        <p><strong>Likes:</strong> {model.likes || "N/A"}</p>
-                                        <p><strong>Pipeline Tag:</strong> {model?.pipeline_tag || "N/A"}</p>
-                                        <p><strong>Trending Score:</strong> {model.trendingScore || "N/A"}</p>
-                                        <p><strong>Model Size:</strong> {model.size ? `${model.size.size} ${model.size.unit}` : "Loading..."}</p>
+                                  {loadingDownload ? (
+                                    <svg
+                                      className="animate-spin h-5 w-5 mr-2 text-white"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        className="opacity-25"
+                                      />
+                                      <path
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                        className="opacity-75"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    ` Download ${model.id}`
+                                  )}
+                                </button>
+                              )}
 
-                                        <p><strong>Tags:</strong> </p>
-                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
-                                            {model.tags?.length ? (
-                                                model.tags.map((tag: string, index: number) => (
-                                                    <span
-                                                        key={index}
-                                                        className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
-                                                    >
-                                                        {tag}
-                                                    </span>
-                                                ))
-                                            ) : (
-                                                <span className="text-sm text-gray-500">N/A</span>
-                                            )}
-                                        </div>
+                              {progress && Object.keys(progress).length > 0 && (
+                                <div>
+                                  {Object.entries(progress).map(
+                                    ([modelId, prog]) => (
+                                      <p key={modelId}>
+                                        Model {modelId} Progress: {prog}%
+                                      </p>
+                                    )
+                                  )}
+                                </div>
+                              )}
+                              {downloadedModel && (
+                                <p>Model saved at: {downloadedModel}</p>
+                              )}
+                            </div>
+                          </details>
+                        </li>
+                      )
+                    )}
+                </ul>
+              </>
+            )}
 
+            <h3 className="text-l font-semibold mb-4 text-black mt-4">
+              Download Model
+            </h3>
+            <ul className="bg-white p-4 rounded-md shadow-md">
+              {modelLists
+                ?.slice(0, visibleCount)
+                .map(
+                  (model: APIHuggingFaceModeListsResponse, index: number) => (
+                    <li
+                      key={index}
+                      className="border-b last:border-none py-2 text-black"
+                    >
+                      <details
+                        className="cursor-pointer"
+                        onToggle={(e) => {
+                          const isOpen = (e.target as HTMLDetailsElement).open;
+                          setExpandedModel(isOpen ? model.id : null);
 
+                          if (isOpen) {
+                            checkModelDownloaded(model.id);
+                            mutate(); // Fetch model details
+                          }
+                        }}
+                      >
+                        <summary className="font-medium">{model.id}</summary>
+                        <div className="ml-4 mt-2 text-gray-700">
+                          <p>
+                            <strong>Downloads:</strong>{' '}
+                            {model.downloads || 'N/A'}
+                          </p>
+                          <p>
+                            <strong>Library:</strong>{' '}
+                            {model.library_name || 'N/A'}
+                          </p>
+                          <p>
+                            <strong>Likes:</strong> {model.likes || 'N/A'}
+                          </p>
+                          <p>
+                            <strong>Pipeline Tag:</strong>{' '}
+                            {model?.pipeline_tag || 'N/A'}
+                          </p>
+                          <p>
+                            <strong>Trending Score:</strong>{' '}
+                            {model.trendingScore || 'N/A'}
+                          </p>
+                          <p>
+                            <strong>Model Size:</strong>{' '}
+                            {model.size
+                              ? `${model.size.size} ${model.size.unit}`
+                              : 'Loading...'}
+                          </p>
 
-                                        {model.downloaded ? (
-                                            // Grouped buttons when the model is downloaded
-                                            <div className="mt-4 flex space-x-2 justify-end">
-                                                <button
-                                                    key={`update-${model.id}`}
-                                                    onClick={() => handleDownloadModel(model.id || "")}
-                                                    className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
-                                                >
-                                                    Update
-                                                </button>
-                                                <button
-                                                    key={`delete-${model.id}`}
-                                                    onClick={() => handleDeleteModel(model.id || "")}
-                                                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                                                >
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            // Download button when model is not downloaded
-                                            <button
-                                                key={model.id}
-                                                onClick={() => handleDownloadModel(model.id || "")}
-                                                className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                            >
-                                                Download {model.id}
-                                            </button>
-                                        )}
+                          <p>
+                            <strong>Tags:</strong>{' '}
+                          </p>
+                          <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                            {model.tags?.length ? (
+                              model.tags.map((tag: string, index: number) => (
+                                <span
+                                  key={index}
+                                  className="px-2 py-1 text-sm bg-gray-200 text-gray-700 rounded-md"
+                                >
+                                  {tag}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-sm text-gray-500">N/A</span>
+                            )}
+                          </div>
 
-                                        {/* Display progress only when it's not empty */}
-                                        {progress && Object.keys(progress).length > 0 && (
-                                            <div>
-                                                {Object.entries(progress).map(([modelId, prog]) => (
-                                                    <p key={modelId}>Model {modelId} Progress: {prog}%</p>
-                                                ))}
-                                            </div>
-                                        )}
-                                        {downloadedModel && <p>Model saved at: {downloadedModel}</p>}
-                                        {/* Display Available Files & Download Buttons */}
-                                        {/* {expandedModel === model.id ? (
+                          {model.downloaded ? (
+                            // Grouped buttons when the model is downloaded
+                            <div className="mt-4 flex space-x-2 justify-end">
+                              <button
+                                key={`update-${model.id}`}
+                                onClick={() =>
+                                  handleDownloadModel(model.id || '')
+                                }
+                                className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                              >
+                                Update
+                              </button>
+                              <button
+                                key={`delete-${model.id}`}
+                                onClick={() =>
+                                  handleDeleteModel(model.id || '')
+                                }
+                                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          ) : (
+                            // Download button when model is not downloaded
+                            <button
+                              className="mt-2 block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                              onClick={() =>
+                                handleDownloadModel(model.id || '')
+                              }
+                              disabled={loadingDownload}
+                            >
+                              {loadingDownload ? (
+                                <svg
+                                  className="animate-spin h-5 w-5 mr-2 text-white"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                >
+                                  <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="10"
+                                    stroke="currentColor"
+                                    strokeWidth="4"
+                                    className="opacity-25"
+                                  />
+                                  <path
+                                    fill="currentColor"
+                                    d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                    className="opacity-75"
+                                  />
+                                </svg>
+                              ) : (
+                                ` Download ${model.id}`
+                              )}
+                            </button>
+                          )}
+
+                          {/* Display progress only when it's not empty */}
+                          {progress && Object.keys(progress).length > 0 && (
+                            <div>
+                              {Object.entries(progress).map(
+                                ([modelId, prog]) => (
+                                  <p key={modelId}>
+                                    Model {modelId} Progress: {prog}%
+                                  </p>
+                                )
+                              )}
+                            </div>
+                          )}
+                          {downloadedModel && (
+                            <p>Model saved at: {downloadedModel}</p>
+                          )}
+                          {/* Display Available Files & Download Buttons */}
+                          {/* {expandedModel === model.id ? (
                                             modelDetails ? (
                                                 modelDetails.siblings.map((file: any) => (
                                                     <a
@@ -447,24 +591,25 @@ const MarketPlace: React.FC = () => {
                                                 <p className="text-gray-500">Loading files...</p>
                                             )
                                         ) : null} */}
-                                    </div>
-                                </details>
-                            </li>
-                        ))}
-                    </ul>
+                        </div>
+                      </details>
+                    </li>
+                  )
+                )}
+            </ul>
 
-                    {/* Load More Button */}
-                    {visibleCount < data?.length && (
-                        <button
-                            onClick={handleLoadMore}
-                            className="mt-4 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-                        >
-                            Load More
-                        </button>
-                    )}
-                </div>
-            </main>
-        </div>
+            {/* Load More Button */}
+            {visibleCount < data?.length && (
+              <button
+                onClick={handleLoadMore}
+                className="mt-4 px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Load More
+              </button>
+            )}
+          </div>
+        </main>
+      </div>
     );
 };
 
