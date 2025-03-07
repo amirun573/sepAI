@@ -46,6 +46,7 @@ executor = concurrent.futures.ThreadPoolExecutor(
 # ✅ Limit cache size to avoid memory overflow
 MAX_CACHE_SIZE = 3
 MAX_MODELS = 1  # Set a limit on cached models
+MAX_TIMEOUT: int = 90
 loaded_models = OrderedDict()# Initialize the API
 api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
@@ -894,18 +895,28 @@ async def _async_prompt(model_id: int, prompt: str):
         # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
        # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
         
-        with ThreadPoolExecutor(max_workers=2) as pool:
+        with ProcessPoolExecutor(max_workers=2) as pool:
             future = loop.run_in_executor(pool, partial(_generate_text, text_generator, prompt))
             
             try:
-                generated_text = await asyncio.wait_for(future, timeout=100)  # Set timeout
+                # Set timeout
+                generated_text = await asyncio.wait_for(future, timeout=MAX_TIMEOUT)
             except asyncio.TimeoutError:
+                future.cancel()
+                pool.shutdown(wait=False)  
+
                 print("❌ _generate_text timed out!")
+                return "Timeout error"
+            except Exception as e:
+                future.cancel()
+                pool.shutdown(wait=False)
+
+                print("❌Exception Process Pool!", str(e))
                 return "Timeout error"
             finally:
                 # ✅ Shutdown ThreadPoolExecutor and clean up
                 pool.shutdown(wait=False)  
-                print("🛑 ThreadPoolExecutor shut down.")
+                print("🛑 ProcessPoolExecutor shut down.")
                 # ✅ Force garbage collection to free memory
                 gc.collect()
                 device_os.clear_pytorch_cache()
@@ -929,9 +940,15 @@ async def _async_prompt(model_id: int, prompt: str):
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return f"Error generating response: {str(e)}"
     
+
 def _generate_text(text_generator, prompt):
     try:
-        print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log
+        print("🚀 _generate_text called with prompt:", prompt)
+
+        # ✅ Add a manual timeout mechanism
+        start_time = time.time()
+        max_time = MAX_TIMEOUT  # seconds
+
         generated_text = text_generator(
             prompt,
             max_length=100,
@@ -941,9 +958,11 @@ def _generate_text(text_generator, prompt):
             truncation=True,
             repetition_penalty=1.2,
         )
-        print("✅ _generate_text output:", generated_text)  # ✅ Debugging log
 
-        # ✅ Ensure proper format
+        if time.time() - start_time > max_time:
+            raise TimeoutError("Generation exceeded time limit")
+
+        print("✅ _generate_text output:", generated_text)
         return generated_text[0]["generated_text"].strip() if generated_text else None
     except Exception as e:
         print(f"❌ Error in _generate_text: {e}")

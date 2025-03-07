@@ -2,7 +2,7 @@ import os
 
 from pathlib import Path  # Correct import
 from .os import OSHandler
-
+import asyncio
 class WindowsHandler(OSHandler):
     def os_name(self) -> str:
         return "Windows"
@@ -20,3 +20,6 @@ class WindowsHandler(OSHandler):
             model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
             return str(model_path)
+    def async_event_loop_policy(self)-> bool:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+        return True

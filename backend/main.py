@@ -47,6 +47,7 @@ def run_server():
     device_os = OSFactory()
     device_os.check_pytorch_device()  # ✅ This will work now
 
+    device_os.get_os_handler().async_event_loop_policy()
     print("🚀 Starting FastAPI with Socket.IO on ws://localhost:8000")
 
 

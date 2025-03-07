@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import subprocess
@@ -104,6 +105,8 @@ class MacOSHandler(OSHandler):
             )
         
 
+    def async_event_loop_policy(self) -> bool:
+        return False
     # Run the function
 
 
