@@ -38,12 +38,13 @@ async def initialize_database():
 
 
 async def run_migrations():
-    """Run Alembic migrations asynchronously."""
-    alembic_cfg = Config("alembic.ini")
+    """Run Alembic migrations asynchronously using the Alembic API."""
     print("⚡ Running Alembic migrations...")
 
+    alembic_cfg = Config("alembic.ini")
     loop = asyncio.get_running_loop()
-    await loop.run_in_executor(None, lambda: subprocess.run(["alembic", "upgrade", "head"], check=True))
+
+    await loop.run_in_executor(None, lambda: command.upgrade(alembic_cfg, "head"))
 
     print("✅ Database is up to date.")
 
