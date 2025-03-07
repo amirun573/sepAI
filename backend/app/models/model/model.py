@@ -904,7 +904,7 @@ async def _async_prompt(model_id: int, prompt: str):
                 return "Timeout error"
             finally:
                 # ✅ Shutdown ThreadPoolExecutor and clean up
-                pool.shutdown(wait=True)  
+                pool.shutdown(wait=False)  
                 print("🛑 ThreadPoolExecutor shut down.")
                 # ✅ Force garbage collection to free memory
                 gc.collect()
