@@ -134,6 +134,37 @@ async def get_folder_size(path):
     return total_size
 
 
+def get_folder_size(model_path):
+    if not os.path.exists(model_path):
+        print(f"❌ Model path does not exist: {model_path}")
+        return 0
+
+    if not os.path.isdir(model_path):
+        print(f"⚠️ {model_path} is not a directory!")
+        return 0
+
+    total_size = 0
+    try:
+        # Recursively get file sizes
+        for root, dirs, files in os.walk(model_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                total_size += os.path.getsize(file_path)  # Get file size
+                # Debugging
+                print(f"📄 {file_path} --> {os.path.getsize(file_path)} bytes")
+
+    except PermissionError:
+        print(f"🔒 Permission denied: {model_path}")
+        return 0
+    except Exception as e:
+        print(f"❌ Error reading files: {e}")
+        return 0
+
+    print(f"📁 Total size of '{model_path}': {total_size} bytes")
+    return total_size
+
+
+
 async def get_folder_size_async(path):
     return await asyncio.to_thread(get_folder_size, path)
 
@@ -430,9 +461,9 @@ async def Get_Model_Downloaded():
             return {"error": str(e)}
 
 
-def delete_model_folder(model_id: str, base_path: str) -> bool:
+def delete_model_folder(path: str) -> bool:
     # Construct the full path
-    model_path = os.path.join(base_path, model_id)
+    model_path = os.path.join(path)
 
     try:
         # Check if the folder exists
@@ -474,15 +505,14 @@ async def Delete_Model(sid, model_id, sio):
                 await sio.emit("error", {"model_id": model_id, "message": "Path Not Found"}, to=sid)
                 return
 
-            path = setting['modelDownloadPath']  # Get the file path
-            model_name = model.model_name  # Get the file path
+            model_path = model.path  # Get the file path
 
             # Emit event: Initialization
             await sio.emit("progress", {"model_id": model_id, "status": "Initializing Deletion"}, to=sid)
 
             # Delete the file from disk
-            if os.path.exists(path):
-                result = delete_model_folder(model_name, path)
+            if os.path.exists(model_path):
+                result = delete_model_folder(model_path)
 
                 if result is True:
                     await sio.emit("progress", {"model_id": model_id, "status": "File Deleted"}, to=sid)
@@ -591,7 +621,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
             if existing_model:
                 msg = f"✅ Model {model_id} already stored in DB at: {model_path}"
                 print(msg)
-                await sio.emit("status", {"sid": sid, "message": msg})
+                await sio.emit("path_exist", {"sid": sid, "message": msg})
                 return model_path
 
             # Check if model is already cached
@@ -636,6 +666,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
 
+            print("Check Model Path Location-->", model_path)
             # Ensure the model_path exists before listing files
             if not os.path.exists(model_path):
                 error_msg = f"❌ Model path does not exist: {model_path}"
@@ -643,11 +674,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 await sio.emit("error", {"sid": sid, "message": error_msg})
                 return None
             # Get model size
-            total_size = sum(
-                os.path.getsize(os.path.join(model_path, f))
-                for f in os.listdir(model_path)
-                if os.path.isfile(os.path.join(model_path, f))
-            )
+            total_size = get_folder_size(model_path)
 
             print("total size-->", total_size)
             size_storage = convert_storage_unit(total_size)
@@ -665,6 +692,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             msg = f"✅ Model {model_id} stored in the database."
             print(msg)
             await sio.emit("status", {"sid": sid, "message": msg})
+            msg = f"✅ Download {model_id} Completed."
+            await sio.emit("download_completed", {"sid": sid, "message": msg, "model_id": model_id})
 
             return model_path
 

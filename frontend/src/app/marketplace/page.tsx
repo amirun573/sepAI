@@ -78,23 +78,36 @@ const MarketPlace: React.FC = () => {
       setSocketStatus('Connected');
     });
 
-    socket.on('progress', (data) => {
+    socket.on('progress', (data: any) => {
       console.log('🚀 Received Progress Update:', data);
       // setProgress((prev) => ({ ...prev, [data.model_id]: data.progress }));
     });
 
-    socket.on('status', (data) => {
+    socket.on('status', (data: any) => {
       console.log('🚀 Received Progress Update:', data);
       // setProgress((prev) => ({ ...prev, [data.model_id]: data.status }));
     });
 
-    socket.on('completed', (data) => {
+    socket.on('completed', (data: any) => {
       console.log('🎉 Model Downloaded:', data);
       alert(`🎉 Model ${data.model_id} downloaded successfully!`);
       location.reload();
     });
 
-    socket.on('download_error', (data) => {
+    socket.on('download_completed', (data: any) => {
+      console.log('🎉 Model Downloaded:', data);
+      alert(`🎉 Model ${data.model_id} downloaded successfully!`);
+      setLoadingDownload(false);
+      location.reload();
+    });
+
+    socket.on('path_exist', (data: any) => {
+      console.log('🎉 Path Exist:', data);
+      alert(` ${data.message} `);
+      setLoadingDownload(false);
+    });
+
+    socket.on('download_error', (data: any) => {
       console.error('⚠️ Error:', data.error);
       alert(`⚠️ Error downloading model ${data.model_id}: ${data.error}`);
     });
@@ -104,7 +117,7 @@ const MarketPlace: React.FC = () => {
       setSocketStatus('Disconnected');
     });
 
-    socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error: any) => {
       console.error('⚠️ Connection error:', error);
       setSocketStatus('Connection error');
     });
@@ -158,6 +171,7 @@ const MarketPlace: React.FC = () => {
 
   const handleDownloadModel = (model_id: string) => {
     try {
+      setLoadingDownload(true);
       socket.emit('start_download', {model_id});
     } catch (error) {
       console.error('Download Problem');
@@ -354,23 +368,71 @@ const MarketPlace: React.FC = () => {
                               <div className="mt-4 flex space-x-2 justify-end">
                                 <button
                                   key={`update-${model.id}`}
+                                  className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
                                   onClick={() =>
                                     handleDownloadModel(model.id || '')
                                   }
-                                  className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                                  disabled={loadingDownload}
                                 >
-                                  Update
+                                  {loadingDownload ? (
+                                    <svg
+                                      className="animate-spin h-5 w-5 mr-2 text-white"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        className="opacity-25"
+                                      />
+                                      <path
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                        className="opacity-75"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    `Update`
+                                  )}
                                 </button>
+          
                                 <button
                                   key={`delete-${model.id}`}
+                                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
                                   onClick={() =>
                                     handleDeleteModel(model.id || '')
                                   }
-                                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                                  disabled={loadingDownload}
                                 >
-                                  Delete
+                                  {loadingDownload ? (
+                                    <svg
+                                      className="animate-spin h-5 w-5 mr-2 text-white"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        className="opacity-25"
+                                      />
+                                      <path
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                        className="opacity-75"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    `Delete`
+                                  )}
                                 </button>
                               </div>
+
                             ) : (
                               // <button
                               //     key={model.id}
@@ -505,21 +567,72 @@ const MarketPlace: React.FC = () => {
                       {model.downloaded ? (
                         // Grouped buttons when the model is downloaded
                         <div className="mt-4 flex space-x-2 justify-end">
-                          <button
-                            key={`update-${model.id}`}
-                            onClick={() => handleDownloadModel(model.id || '')}
-                            className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
-                          >
-                            Update
-                          </button>
-                          <button
-                            key={`delete-${model.id}`}
-                            onClick={() => handleDeleteModel(model.id || '')}
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                          >
-                            Delete
-                          </button>
-                        </div>
+                            <button
+                                  key={`update-${model.id}`}
+                                  className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
+                                  onClick={() =>
+                                    handleDownloadModel(model.id || '')
+                                  }
+                                  disabled={loadingDownload}
+                                >
+                                  {loadingDownload ? (
+                                    <svg
+                                      className="animate-spin h-5 w-5 mr-2 text-white"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        className="opacity-25"
+                                      />
+                                      <path
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                        className="opacity-75"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    `Update`
+                                  )}
+                                </button>
+          
+                                <button
+                                  key={`delete-${model.id}`}
+                                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                                  onClick={() =>
+                                    handleDeleteModel(model.id || '')
+                                  }
+                                  disabled={loadingDownload}
+                                >
+                                  {loadingDownload ? (
+                                    <svg
+                                      className="animate-spin h-5 w-5 mr-2 text-white"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                    >
+                                      <circle
+                                        cx="12"
+                                        cy="12"
+                                        r="10"
+                                        stroke="currentColor"
+                                        strokeWidth="4"
+                                        className="opacity-25"
+                                      />
+                                      <path
+                                        fill="currentColor"
+                                        d="M4 12a8 8 0 018-8v4l4-4-4-4v4a8 8 0 00-8 8h4z"
+                                        className="opacity-75"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    `Delete`
+                                  )}
+                                </button>
+                              </div>
                       ) : (
                         // Download button when model is not downloaded
                         <button
@@ -603,6 +716,6 @@ const MarketPlace: React.FC = () => {
       </main>
     </div>
   );
-};;
+};
 
 export default MarketPlace;
