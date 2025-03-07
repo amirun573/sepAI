@@ -567,6 +567,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             result = await db.execute(select(Setting.path_store_cache_model_main))
             cache_path = result.scalar_one_or_none()
 
+            print("cache_path-->", cache_path)
+
             if not cache_path:
                 error_msg = "❌ No cache path found in settings."
                 print(error_msg)
@@ -646,6 +648,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 for f in os.listdir(model_path)
                 if os.path.isfile(os.path.join(model_path, f))
             )
+
+            print("total size-->", total_size)
             size_storage = convert_storage_unit(total_size)
 
             # Store metadata in DB
