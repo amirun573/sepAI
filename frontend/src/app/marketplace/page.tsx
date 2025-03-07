@@ -366,7 +366,7 @@ const MarketPlace: React.FC = () => {
 
                             {model.downloaded ? (
                               <div className="mt-4 flex space-x-2 justify-end">
-                                <button
+                                {/* <button
                                   key={`update-${model.id}`}
                                   className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
                                   onClick={() =>
@@ -397,7 +397,7 @@ const MarketPlace: React.FC = () => {
                                   ) : (
                                     `Update`
                                   )}
-                                </button>
+                                </button> */}
           
                                 <button
                                   key={`delete-${model.id}`}
@@ -567,7 +567,7 @@ const MarketPlace: React.FC = () => {
                       {model.downloaded ? (
                         // Grouped buttons when the model is downloaded
                         <div className="mt-4 flex space-x-2 justify-end">
-                            <button
+                            {/* <button
                                   key={`update-${model.id}`}
                                   className="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600"
                                   onClick={() =>
@@ -598,7 +598,7 @@ const MarketPlace: React.FC = () => {
                                   ) : (
                                     `Update`
                                   )}
-                                </button>
+                                </button> */}
           
                                 <button
                                   key={`delete-${model.id}`}
