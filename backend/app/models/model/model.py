@@ -73,27 +73,6 @@ thread_pool = ThreadPoolExecutor(max_workers=2)
 # Track file download progress manually
 
 
-async def track_download_progress(model_path, model_id, sid, sio, interval=5):
-    """Continuously tracks download progress and emits updates."""
-    previous_size = 0
-
-    while model_id in running_tasks:
-        # Wait a few seconds before checking again
-        await asyncio.sleep(interval)
-
-        current_size = await get_folder_size(model_path)
-        downloaded_mb = current_size / (1024 * 1024)  # Convert bytes to MB
-
-        if current_size > previous_size:
-            await sio.emit("progress", {
-                "model_id": model_id,
-                "downloaded_mb": downloaded_mb
-            }, to=sid)
-
-            previous_size = current_size  # Update previous size
-
-        if not os.path.exists(model_path):  # Stop if folder is deleted
-            break
 
 
 # Run blocking task in executor
@@ -107,31 +86,6 @@ async def get_download_path():
         if setting and setting.path_store_name_main:
             return setting.path_store_name_main
         return None  # Handle missing path gracefully
-
-
-async def get_model_size_from_huggingface(model_id):
-    """Fetch the estimated model size from Hugging Face Hub."""
-    try:
-        api = HfApi()
-        model_info = api.model_info(model_id)
-        return model_info.disk_size  # Returns size in bytes
-    except Exception:
-        return None  # If API call fails, fallback to dynamic estimation
-
-
-async def get_folder_size(path):
-    """Calculate total size of files in a directory (in bytes), checking if the path exists."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Path '{path}' does not exist.")
-
-    total_size = 0
-    for dirpath, _, filenames in os.walk(path):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            if os.path.isfile(fp):
-                total_size += os.path.getsize(fp)
-
-    return total_size
 
 
 def get_folder_size(model_path):
@@ -164,115 +118,6 @@ def get_folder_size(model_path):
     return total_size
 
 
-
-async def get_folder_size_async(path):
-    return await asyncio.to_thread(get_folder_size, path)
-
-
-async def run_snapshot_download(model_id, model_path):
-    """Run `snapshot_download` in a separate thread to prevent blocking the event loop."""
-    return await asyncio.to_thread(
-        snapshot_download, repo_id=model_id, local_dir=model_path, resume_download=True
-    )
-
-
-async def fetch_and_save_model_files(model_id, save_path, repo_type="model"):
-    """
-    Fetch and save the list of all available files for a model before downloading.
-    Uses HfApi().list_repo_tree() to ensure we get ALL files, including metadata.
-
-    :param model_id: Hugging Face model ID (e.g., "PramaLLC/BEN2")
-    :param save_path: Directory to save the file list
-    :param repo_type: Repository type ("model", "dataset", or "space")
-    :return: Path to the saved JSON file
-    """
-    try:
-        os.makedirs(save_path, exist_ok=True)
-
-        # ✅ Use HfApi to get a full list of files, including metadata
-        api = HfApi()
-        file_list = api.list_repo_tree(repo_id=model_id, repo_type=repo_type)
-
-        if not file_list:
-            print(f"❌ No files found for model {model_id}")
-            return None
-
-        # Convert to a structured list (filename, size, etc.)
-        structured_files = [
-            {"path": file.path, "size": file.size, "type": file.type} for file in file_list
-        ]
-
-        file_list_path = os.path.join(save_path, "files_to_download.json")
-
-        # Save the file list
-        with open(file_list_path, "w") as f:
-            json.dump(structured_files, f, indent=4)
-
-        print(f"✅ File list saved at: {file_list_path}")
-        return file_list_path
-
-    except Exception as e:
-        print(f"❌ Error fetching model files: {str(e)}")
-        return None
-
-
-async def download_file_async(model_id, file_name, save_path):
-    """
-    Run hf_hub_download in a non-blocking way using asyncio.to_thread.
-    """
-    return await asyncio.to_thread(hf_hub_download, repo_id=model_id, filename=file_name, local_dir=save_path)
-
-
-async def download_model_files(model_id, save_path):
-    """
-    Download model files after saving the file list (Non-Blocking).
-    """
-    file_list_path = await fetch_and_save_model_files(model_id, save_path)
-    if not file_list_path:
-        print("❌ Failed to fetch file list. Aborting download.")
-        return None
-
-    with open(file_list_path, "r") as f:
-        files_to_download = json.load(f)
-
-    # Use asyncio.gather for concurrent downloads
-    download_tasks = [download_file_async(
-        model_id, file_name, save_path) for file_name in files_to_download]
-    results = await asyncio.gather(*download_tasks)
-
-    return save_path
-
-
-async def download_with_progress(model_id, sid, sio):
-    try:
-        print(f"🚀 Starting download for {model_id} using snapshot_download...")
-
-        # ✅ Get the download path
-        download_path = await get_download_path()
-        if not download_path:
-            raise ValueError("Download path is not set in the database")
-
-        model_path = os.path.join(download_path, model_id)
-        os.makedirs(model_path, exist_ok=True)  # Ensure directory exists
-
-        # ✅ Emit initialization event
-        await sio.emit("status", {"model_id": model_id, "status": "Downloading model"}, to=sid)
-        # size = await get_folder_size_async(model_path)
-        # ✅ Run `snapshot_download` in a separate thread (non-blocking)
-        # final_path = await asyncio.to_thread(snapshot_download, repo_id=model_id, local_dir=model_path, resume_download=True)
-
-        final_path = snapshot_download(
-            repo_id=model_id, local_dir=model_path, resume_download=True)
-
-        # ✅ Emit completion event
-        await sio.emit("completed", {"model_id": model_id, "model_path": final_path}, to=sid)
-
-        return model_path
-
-    except Exception as e:
-        await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
-
-
 async def stop_download(model_id, sid, sio):
     """Stops a running download."""
     if model_id in running_tasks:
@@ -284,60 +129,6 @@ async def stop_download(model_id, sid, sio):
         await sio.emit("error", {"model_id": model_id, "error": "No active download"}, to=sid)
 
 # 🔹 Background task to run snapshot_download in a separate thread
-
-
-async def download_model_in_background(sid, model_id, sio):
-    try:
-        await sio.emit("status", {"model_id": model_id, "status": "Initializing Download"}, to=sid)
-
-        # ✅ Get the download path
-        download_path = await get_download_path()
-        if not download_path:
-            raise ValueError("Download path is not set in the database")
-
-        model_path = os.path.join(download_path, model_id)
-        os.makedirs(model_path, exist_ok=True)  # Ensure directory exists
-        # ✅ Start the download in the background
-        final_path = await download_model_files(model_id, model_path)
-        if final_path:
-            print(f"🎉 Download completed! Files saved at: {final_path}")
-
-        # ✅ Calculate model size after download
-        total_size = await get_folder_size(final_path)
-        size_storage = convert_storage_unit(total_size)
-
-        # ✅ Save details to database
-        async with async_session_maker() as db:
-            result = await db.execute(select(Model).where(Model.model_name == model_id))
-            existing_model = result.scalars().first()
-
-            if existing_model:
-                existing_model.path = final_path
-                existing_model.size = size_storage.size
-                existing_model.unit = size_storage.unit
-            else:
-                new_model = Model(
-                    model_name=model_id,
-                    path=final_path,
-                    size=size_storage.size,
-                    unit=size_storage.unit
-                )
-                db.add(new_model)
-
-            await db.commit()
-
-        print("✅ Download complete:", final_path)
-        await sio.emit("status", {"model_id": model_id, "status": f"Download complete, saved at {final_path}"}, to=sid)
-        return final_path
-
-    except SQLAlchemyError as e:
-        await db.rollback()
-        print(f"❌ Database error: {e}")
-        return {"error": "Database error occurred"}
-
-    except Exception as e:
-        await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
-
 
 def convert_storage_unit(size: float) -> ModelSizeResponse:
     used_storage_mb = round(size / (1024 ** 2), 2)
