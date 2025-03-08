@@ -28,7 +28,7 @@ from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
 import huggingface_hub
 import glob
 import re
-from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
 import gc
 from collections import OrderedDict
@@ -46,8 +46,8 @@ executor = concurrent.futures.ThreadPoolExecutor(
 # ✅ Limit cache size to avoid memory overflow
 MAX_CACHE_SIZE = 3
 MAX_MODELS = 1  # Set a limit on cached models
-MAX_TIMEOUT: int = 90
-loaded_models = OrderedDict()# Initialize the API
+MAX_TIMEOUT: int = 300
+loaded_models = OrderedDict()  # Initialize the API
 api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
@@ -71,8 +71,6 @@ thread_pool = ThreadPoolExecutor(max_workers=2)
 # 🔹 Synchronous function to handle download & progress
 # 🔹 Function to track download progress manually
 # Track file download progress manually
-
-
 
 
 # Run blocking task in executor
@@ -129,6 +127,7 @@ async def stop_download(model_id, sid, sio):
         await sio.emit("error", {"model_id": model_id, "error": "No active download"}, to=sid)
 
 # 🔹 Background task to run snapshot_download in a separate thread
+
 
 def convert_storage_unit(size: float) -> ModelSizeResponse:
     used_storage_mb = round(size / (1024 ** 2), 2)
@@ -519,11 +518,10 @@ async def get_or_load_model(model_id: int):
     """Retrieve model from memory or load it with a maximum cache size."""
     try:
         print("🔍 Checking loaded models:", loaded_models.keys())
-
         # ✅ Check if model is already loaded
         if model_id in loaded_models:
             print(f"✅ Model {model_id} already loaded. Moving to most recent.")
-            loaded_models.move_to_end(model_id)  # Move accessed model to the end (most recently used)
+            # loaded_models.move_to_end(model_id)  # Move accessed model to the end (most recently used)
             return loaded_models[model_id]
 
         loop = asyncio.get_running_loop()
@@ -535,15 +533,20 @@ async def get_or_load_model(model_id: int):
             return None
 
         # ✅ Load the model off-thread
-        future = loop.run_in_executor(executor, partial(_load_model_sync, model_id, model_path))
-        text_generator = await asyncio.wait_for(future, timeout=100)  # ✅ Set timeout
+        future = loop.run_in_executor(executor, partial(
+            _load_model_sync, model_id, model_path))
+        # ✅ Set timeout
+        text_generator = await asyncio.wait_for(future, timeout=100)
 
         if text_generator:
             # ✅ Ensure memory limit is respected (evict oldest model if needed)
             if len(loaded_models) >= MAX_MODELS:
-                oldest_model_id, _ = loaded_models.popitem(last=False)  # Remove the oldest (LRU)
-                print(f"🗑️ Removing oldest model {oldest_model_id} to free memory...")
-                unload_model(oldest_model_id)  # ✅ Properly unload model from memory
+                oldest_model_id, _ = loaded_models.popitem(
+                    last=False)  # Remove the oldest (LRU)
+                print(
+                    f"🗑️ Removing oldest model {oldest_model_id} to free memory...")
+                # ✅ Properly unload model from memory
+                unload_model(oldest_model_id)
 
             # ✅ Cache new model
             loaded_models[model_id] = text_generator
@@ -563,6 +566,7 @@ async def get_or_load_model(model_id: int):
         # ✅ Clean up memory to prevent leaks
         gc.collect()
         device_os.clear_pytorch_cache()
+
 
 def unload_model(model_id: int):
     """Unload a specific model from memory to free RAM."""
@@ -596,11 +600,12 @@ def _load_model_sync(model_id: int, model_path: str):
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
-            trust_remote_code=False
+            trust_remote_code=True
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
-        
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=False)
+
         model.to(device)
 
         text_generator = pipeline(
@@ -615,6 +620,7 @@ def _load_model_sync(model_id: int, model_path: str):
     except Exception as e:
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
+
 
 async def load_model_from_db(model_id: int):
     """Fetch model path from the database."""
@@ -653,8 +659,9 @@ async def load_model(model_id: int, model_path: str):
             trust_remote_code=False
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
-        
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=False)
+
         model.to(device)
 
         text_generator = pipeline(
@@ -685,7 +692,8 @@ async def _async_prompt(model_id: int, prompt: str):
             removed_model_id, removed_model = loaded_models.popitem(last=False)
             del removed_model  # ✅ Explicitly delete the model
             gc.collect()  # ✅ Force garbage collection
-            print(f"🗑️ Removed cached model {removed_model_id} to free memory.")
+            print(
+                f"🗑️ Removed cached model {removed_model_id} to free memory.")
 
         # ✅ Check if model is already loaded
         if str(model_id) in loaded_models:
@@ -713,21 +721,22 @@ async def _async_prompt(model_id: int, prompt: str):
 
         print("🚀 Start Generate Text")
 
-         # ✅ Ensure we are getting the correct event loop
+        # ✅ Ensure we are getting the correct event loop
         loop = asyncio.get_running_loop()
 
         # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
        # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
-        
+
         with ProcessPoolExecutor(max_workers=2) as pool:
-            future = loop.run_in_executor(pool, partial(_generate_text, text_generator, prompt))
-            
+            future = loop.run_in_executor(pool, partial(
+                _generate_text, text_generator, prompt))
+
             try:
                 # Set timeout
                 generated_text = await asyncio.wait_for(future, timeout=MAX_TIMEOUT)
             except asyncio.TimeoutError:
                 future.cancel()
-                pool.shutdown(wait=False)  
+                pool.shutdown(wait=False)
 
                 print("❌ _generate_text timed out!")
                 return "Timeout error"
@@ -739,16 +748,14 @@ async def _async_prompt(model_id: int, prompt: str):
                 return "Timeout error"
             finally:
                 # ✅ Shutdown ThreadPoolExecutor and clean up
-                pool.shutdown(wait=False)  
+                pool.shutdown(wait=False)
                 print("🛑 ProcessPoolExecutor shut down.")
                 # ✅ Force garbage collection to free memory
                 gc.collect()
                 device_os.clear_pytorch_cache()
 
-
         if generated_text is None:
             print("❌ No output from _generate_text")
-
 
         print("✅ Generated Text:", generated_text)
 
@@ -756,14 +763,14 @@ async def _async_prompt(model_id: int, prompt: str):
         # gc.collect()
 
         # ✅ Check & Kill Zombie Processes
-        #async_processor._cleanup_processes()
+        # async_processor._cleanup_processes()
 
         return generated_text
 
     except Exception as e:
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return f"Error generating response: {str(e)}"
-    
+
 
 def _generate_text(text_generator, prompt):
     try:
@@ -775,19 +782,31 @@ def _generate_text(text_generator, prompt):
 
         generated_text = text_generator(
             prompt,
-            max_length=100,
-            do_sample=True,
-            top_k=50,
-            top_p=0.95,
-            truncation=True,
-            repetition_penalty=1.2,
+            max_length=100,  # Ensure enough tokens for full response
+            do_sample=False,  # Prevent randomness
+            temperature=0.2,  # Keep some flexibility but limit randomness
+            top_k=10,  # Allow a small range of high-probability tokens
+            top_p=0.9,  # Use nucleus sampling
+            repetition_penalty=1.05,  # Avoid repeated patterns
         )
+
 
         if time.time() - start_time > max_time:
             raise TimeoutError("Generation exceeded time limit")
 
         print("✅ _generate_text output:", generated_text)
-        return generated_text[0]["generated_text"].strip() if generated_text else None
+
+        if generated_text and "generated_text" in generated_text[0]:
+            response = generated_text[0]["generated_text"].strip()
+
+            # ✅ Remove prompt if it appears at the start
+            if response.lower().startswith(prompt.lower()):
+                response = response[len(prompt):].strip()
+
+            return response
+
+        return None
+
     except Exception as e:
         print(f"❌ Error in _generate_text: {e}")
         return None
