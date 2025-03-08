@@ -52,6 +52,8 @@
     "react-dom": "^18",
     "react-responsive": "^10.0.0",
     "sharp": "^0.33.5",
+    "socket.io-client": "^4.8.1",
+    "swr": "^2.3.3",
     "winston": "^3.14.2",
     "winston-daily-rotate-file": "^5.0.0",
     "xlsx": "^0.18.5",
@@ -88,7 +90,10 @@
       "package.json"
     ],
     "win": {
-      "target": ["nsis", "zip"],
+      "target": [
+        "nsis",
+        "zip"
+      ],
       "icon": "resources/sepai-icon.ico"
     },
     "mac": {
@@ -96,7 +101,10 @@
       "icon": "resources/sepai-icon.icns"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "resources/sepai-icon.jpg"
     },
     "publish": {
