@@ -8,7 +8,7 @@ sepAI is an open-source application that allows you to explore, select, and run 
 ## 🚀 Download sepAI
 
 [![Download for Mac](https://img.shields.io/badge/Download%20for-Mac-000?logo=apple&style=for-the-badge)](https://mega.nz/folder/21BB3CyI#BX53r3QoQIH0sDw0-9RAZA)
-[![Download for Windows](https://img.shields.io/badge/Download%20for-Windows-0078D6?logo=windows&style=for-the-badge)](your-windows-download-link)
+[![Download for Windows](https://img.shields.io/badge/Download%20for-Windows-0078D6?logo=windows&style=for-the-badge)](https://mega.nz/folder/W4xmyYyR#IqTZeLFbblupelzUNhsUgQ)
 
 ---
 
@@ -55,10 +55,8 @@ Ensure you have the following installed before proceeding:
      ```
    - **Windows:**
      ```sh
-     pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --hidden-import=alembic \
-     --collect-data torch --collect-data transformers --copy-metadata fastapi --copy-metadata pydantic \
-     --copy-metadata starlette --copy-metadata alembic --add-data "alembic;alembic" --add-data "alembic.ini;." \
-     --onefile --name main main.py
+     pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --hidden-import=alembic --collect-data torch --collect-data transformers --copy-metadata fastapi --copy-metadata pydantic --copy-metadata starlette --copy-metadata alembic --add-data "alembic;alembic" --add-data "alembic.ini;." --onefile --name main main.py
+
      ```
 4. The executable file will be available in `dist/main`.
 
