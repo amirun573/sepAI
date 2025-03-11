@@ -24,3 +24,6 @@ class LinuxHandler(OSHandler):
         model_path.mkdir(parents=True, exist_ok=True)  # Ensure folder exists
 
         return str(model_path)
+
+    def async_event_loop_policy(self) -> bool:
+        return False

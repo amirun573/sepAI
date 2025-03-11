@@ -22,3 +22,7 @@ class ModelSizeCalculate(BaseModel):
 class PromptRequest(BaseModel):
     model_id: int
     prompt: str
+
+
+class LoadModelResponse(BaseModel):
+    status: bool

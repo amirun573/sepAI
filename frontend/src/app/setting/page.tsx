@@ -203,7 +203,7 @@ function Setting() {
         <div className="min-h-screen bg-gray-100 p-6">
             <h1 className="text-3xl font-bold text-gray-900 mb-8">Settings</h1>
             <ul className="bg-white p-4 rounded-md shadow-md">
-                <li className="border-b last:border-none py-2 text-black mb-4">
+                {/* <li className="border-b last:border-none py-2 text-black mb-4">
                     Path Download Model
                     <input
                         id="modelDownloadPath"
@@ -220,10 +220,10 @@ function Setting() {
                             Save
                         </button>
                     </div>
-                </li>
+                </li> */}
 
                 <li className="border-b last:border-none py-2 text-black mb-4">
-                    Path Download Cache Model
+                    Path Download Model
                     <input
                         id="cacheModelDownloadPath"
                         type="text"

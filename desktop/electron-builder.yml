@@ -1,0 +1,12 @@
+appId: com.suasanax.pos
+productName: Suasanax POS
+copyright: Copyright © 2024 Suasanax Enterprise
+directories:
+  output: dist
+  buildResources: resources
+files:
+  - from: .
+    filter:
+      - package.json
+      - app
+publish: null

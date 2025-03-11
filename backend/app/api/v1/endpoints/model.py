@@ -1,7 +1,9 @@
 
-from fastapi import APIRouter, WebSocket, Query
-from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, PromptRequest
+from typing import List
+from fastapi import APIRouter, WebSocket, Query, HTTPException
+from app.models.schemas.model import DownloadModelRequest, DownloadModelResponse, ModelSizeRequest, ModelSizeResponse, PromptRequest, LoadModelResponse
 from app.models.model.model import model_size, Get_Model_Downloaded, load_model_from_db,prompt, get_or_load_model
+from app.models.schemas.base import BaseResponse
 
 
 
@@ -30,9 +32,14 @@ class ModelController:
             # Pass as an object
             prompt_answer = await get_or_load_model(model_id)
 
+            if prompt_answer is not None:
+
             # print("saved_model-->",saved_model)
 
-            return str(prompt_answer)
+                return str(prompt_answer)
+            else:
+                raise HTTPException(
+                    status_code=400, detail=f"Failed to Load Model")
     
     @router.post("/prompt", summary="Generate an AI response based on a given model and prompt", description="This endpoint takes a model ID and a user prompt, processes it, and returns a response.")
     async def prompt_answer(request: PromptRequest ):

@@ -4,15 +4,28 @@ Open Source to pick your favourite AI Model.
 
 # Getting Started
 Prerequisites
-1. Python 3.8+ (for Backend)
+1. Python 3.9+ (for Backend)
 
 2. Node.js 16+ (for Frontend)
 
 # Run FastAPI (Backend)
 1. `cd backend`
-2. `virtualenv venv`
-3. `source venv/bin/activate`
+2. `virtualenv venv` / `python3 -m venv venv`
+3. `source venv/bin/activate` / `.\venv\Scripts\Activate`
 4.  `uvicorn main:app --reload`/ `venv/bin/python -m uvicorn main:app --reload`
+
+# Convert Python to Executable file
+1. Ensure to run in enviroment.
+2. Run `rm -rf build/ dist/ __pycache__/ main.spec` to clear cache.
+3. Then, run :
+    a.Mac: `pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --hidden-import=alembic \
+--collect-data=torch --collect-data=transformers --copy-metadata=fastapi --copy-metadata=pydantic \
+--copy-metadata=starlette --copy-metadata=alembic --add-data="alembic:alembic" --add-data="alembic.ini:." \
+--onefile --name=main main.py`
+    b. WIndow : `pyinstaller --hidden-import=transformers --hidden-import=torch --hidden-import=aiosqlite --hidden-import=alembic --collect-data torch --collect-data transformers --copy-metadata fastapi --copy-metadata pydantic --copy-metadata starlette --copy-metadata alembic --add-data "alembic;alembic" --add-data "alembic.ini;." --onefile --name main main.py`
+y
+`
+4. Executable file will be in dist/main
 
 For Alambic migration. Can run
 1. `alembic revision --autogenerate -m "{message}"`

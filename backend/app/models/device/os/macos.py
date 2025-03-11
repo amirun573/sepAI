@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import subprocess
@@ -54,31 +55,22 @@ class MacOSHandler(OSHandler):
             print(f"⚠️ Error: {e}")
             process.terminate()
 
+    def get_gpu_temperature(self):
+        try:
+            output = subprocess.check_output(["istats", "extra"], text=True)
+            for line in output.splitlines():
+                if "GPU" in line:
+                    return float(line.split()[-2])  # Extract temperature value
+        except Exception as e:
+            print(f"Error retrieving GPU temperature: {e}")
+        return 0.0
+
     def get_macos_gpu_info(self) -> DeviceGPUDetails:
         """Fetches GPU details on macOS using system_profiler and returns DeviceGPUDetails."""
         try:
             output = subprocess.check_output(["system_profiler", "SPDisplaysDataType", "-json"], text=True)
             gpu_info = json.loads(output)
-
-            # components = subprocess.check_output(["pmset", "-g", "thermlog"], text=True)
-            # components_info = json.loads(components)
-
-            # print('components_info-->',components_info)
-
             gpu_data = gpu_info.get("SPDisplaysDataType", [])
-
-            # get_thermal_snapshot(5)
-
-
-            # try:
-            #    process = subprocess.Popen(["sudo", "powermetrics", "--samplers", "gpu_power", "-i", "2000"],stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            #    start_time = time.time()
-            #    while time.time() - start_time < 5:  # Run for the given duration
-            #         line = process.stdout.readline()
-            #         if "GPU Power (W)" in line:
-            #             print(line.strip())
-            # except KeyboardInterrupt:
-            #     process.terminate()  # Stop on user interrupt
 
             if not gpu_data:
                 return DeviceGPUDetails(
@@ -98,7 +90,7 @@ class MacOSHandler(OSHandler):
                 memory_used_MB="0",  # macOS doesn’t expose this directly
                 memory_free_MB="0",  # macOS doesn’t expose this directly
                 load_percent=0.0,  # No easy way to get load
-                temperature_C=0.0  # No easy way to get temp
+                temperature_C= 0.0  # Use iStats for temperature
             )
 
         except Exception as e:
@@ -111,9 +103,10 @@ class MacOSHandler(OSHandler):
                 load_percent=0.0,
                 temperature_C=0.0
             )
+        
 
-    
-
+    def async_event_loop_policy(self) -> bool:
+        return False
     # Run the function
 
 

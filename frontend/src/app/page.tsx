@@ -17,7 +17,7 @@ export default function Home() {
           Welcome to SepAI Studio
         </h1>
         <p className="text-gray-700 text-lg text-center mb-6">
-          Let's Go To The Studio
+          Let&apos;s Go To The Studio
         </p>
         <div className="flex justify-center">
           <Link href="/dashboard">

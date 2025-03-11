@@ -1,14 +1,24 @@
-import asyncio
+from app.models.device.os.factory import OSFactory
 import socketio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from huggingface_hub import snapshot_download
 from app.api.v1.routers import api_router
 from socket_manager import sio
+from database import startup_event
+from contextlib import asynccontextmanager
+
+import multiprocessing
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database and cleanup tasks"""
+    await startup_event()
+    yield  # Everything before yield runs on startup, after yield runs on shutdown
 
 # ✅ Initialize FastAPI
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # ✅ Allow CORS
 app.add_middleware(
@@ -22,12 +32,32 @@ app.add_middleware(
 app.include_router(api_router, prefix="/api/v1")
 
 
+
+
 # ✅ Mount FastAPI with Socket.IO
 app = socketio.ASGIApp(sio, other_asgi_app=app)
 
 
 
-# ✅ Run the app
-if __name__ == "__main__":
+
+
+def run_server():
+    """Start FastAPI + Socket.IO Server"""
+    print("🚀 Checking PyTorch device before starting server...")
+    device_os = OSFactory()
+    device_os.check_pytorch_device()  # ✅ This will work now
+
+    device_os.get_os_handler().async_event_loop_policy()
     print("🚀 Starting FastAPI with Socket.IO on ws://localhost:8000")
+
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+if __name__ == "__main__":
+    multiprocessing.freeze_support()  # ✅ Prevents PyInstaller infinite restart issues
+
+    # ✅ Start the server in a separate process
+    server_process = multiprocessing.Process(target=run_server)
+    server_process.start()
+    server_process.join()  # Keeps the process running

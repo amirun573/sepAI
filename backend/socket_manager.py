@@ -1,6 +1,6 @@
 
 
-from app.models.model.model import download_model_in_background, Delete_Model, download_model_to_cache
+from app.models.model.model import  Delete_Model, download_model_to_cache
 import socketio
 import asyncio
 

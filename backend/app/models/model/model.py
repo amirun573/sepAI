@@ -28,8 +28,10 @@ from app.models.model.multi_model import MultiModalityConfig, MultiModalityModel
 import huggingface_hub
 import glob
 import re
-from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
+import gc
+from collections import OrderedDict
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -41,8 +43,11 @@ running_tasks = {}
 executor = concurrent.futures.ThreadPoolExecutor(
     max_workers=3)  # Limit concurrent downloads
 
-
-# Initialize the API
+# ✅ Limit cache size to avoid memory overflow
+MAX_CACHE_SIZE = 3
+MAX_MODELS = 1  # Set a limit on cached models
+MAX_TIMEOUT: int = 300
+loaded_models = OrderedDict()  # Initialize the API
 api = HfApi()
 huggingface_hub.constants.HUGGINGFACE_HUB_TIMEOUT_SEC = 300  # Set timeout to 5 minutes
 
@@ -59,35 +64,13 @@ text_generator = None
 loaded_models = {}
 
 semaphore = asyncio.Semaphore(4)
+thread_pool = ThreadPoolExecutor(max_workers=2)
 
 # Async function to handle the download in the background
 # 🔹 Function to handle the actual model download (Runs in a separate thread)
 # 🔹 Synchronous function to handle download & progress
 # 🔹 Function to track download progress manually
 # Track file download progress manually
-
-
-async def track_download_progress(model_path, model_id, sid, sio, interval=5):
-    """Continuously tracks download progress and emits updates."""
-    previous_size = 0
-
-    while model_id in running_tasks:
-        # Wait a few seconds before checking again
-        await asyncio.sleep(interval)
-
-        current_size = await get_folder_size(model_path)
-        downloaded_mb = current_size / (1024 * 1024)  # Convert bytes to MB
-
-        if current_size > previous_size:
-            await sio.emit("progress", {
-                "model_id": model_id,
-                "downloaded_mb": downloaded_mb
-            }, to=sid)
-
-            previous_size = current_size  # Update previous size
-
-        if not os.path.exists(model_path):  # Stop if folder is deleted
-            break
 
 
 # Run blocking task in executor
@@ -103,137 +86,34 @@ async def get_download_path():
         return None  # Handle missing path gracefully
 
 
-async def get_model_size_from_huggingface(model_id):
-    """Fetch the estimated model size from Hugging Face Hub."""
-    try:
-        api = HfApi()
-        model_info = api.model_info(model_id)
-        return model_info.disk_size  # Returns size in bytes
-    except Exception:
-        return None  # If API call fails, fallback to dynamic estimation
+def get_folder_size(model_path):
+    if not os.path.exists(model_path):
+        print(f"❌ Model path does not exist: {model_path}")
+        return 0
 
-
-async def get_folder_size(path):
-    """Calculate total size of files in a directory (in bytes), checking if the path exists."""
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Path '{path}' does not exist.")
+    if not os.path.isdir(model_path):
+        print(f"⚠️ {model_path} is not a directory!")
+        return 0
 
     total_size = 0
-    for dirpath, _, filenames in os.walk(path):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            if os.path.isfile(fp):
-                total_size += os.path.getsize(fp)
+    try:
+        # Recursively get file sizes
+        for root, dirs, files in os.walk(model_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                total_size += os.path.getsize(file_path)  # Get file size
+                # Debugging
+                print(f"📄 {file_path} --> {os.path.getsize(file_path)} bytes")
 
+    except PermissionError:
+        print(f"🔒 Permission denied: {model_path}")
+        return 0
+    except Exception as e:
+        print(f"❌ Error reading files: {e}")
+        return 0
+
+    print(f"📁 Total size of '{model_path}': {total_size} bytes")
     return total_size
-
-
-async def get_folder_size_async(path):
-    return await asyncio.to_thread(get_folder_size, path)
-
-
-async def run_snapshot_download(model_id, model_path):
-    """Run `snapshot_download` in a separate thread to prevent blocking the event loop."""
-    return await asyncio.to_thread(
-        snapshot_download, repo_id=model_id, local_dir=model_path, resume_download=True
-    )
-
-
-async def fetch_and_save_model_files(model_id, save_path, repo_type="model"):
-    """
-    Fetch and save the list of all available files for a model before downloading.
-    Uses HfApi().list_repo_tree() to ensure we get ALL files, including metadata.
-
-    :param model_id: Hugging Face model ID (e.g., "PramaLLC/BEN2")
-    :param save_path: Directory to save the file list
-    :param repo_type: Repository type ("model", "dataset", or "space")
-    :return: Path to the saved JSON file
-    """
-    try:
-        os.makedirs(save_path, exist_ok=True)
-
-        # ✅ Use HfApi to get a full list of files, including metadata
-        api = HfApi()
-        file_list = api.list_repo_tree(repo_id=model_id, repo_type=repo_type)
-
-        if not file_list:
-            print(f"❌ No files found for model {model_id}")
-            return None
-
-        # Convert to a structured list (filename, size, etc.)
-        structured_files = [
-            {"path": file.path, "size": file.size, "type": file.type} for file in file_list
-        ]
-
-        file_list_path = os.path.join(save_path, "files_to_download.json")
-
-        # Save the file list
-        with open(file_list_path, "w") as f:
-            json.dump(structured_files, f, indent=4)
-
-        print(f"✅ File list saved at: {file_list_path}")
-        return file_list_path
-
-    except Exception as e:
-        print(f"❌ Error fetching model files: {str(e)}")
-        return None
-
-
-async def download_file_async(model_id, file_name, save_path):
-    """
-    Run hf_hub_download in a non-blocking way using asyncio.to_thread.
-    """
-    return await asyncio.to_thread(hf_hub_download, repo_id=model_id, filename=file_name, local_dir=save_path)
-
-
-async def download_model_files(model_id, save_path):
-    """
-    Download model files after saving the file list (Non-Blocking).
-    """
-    file_list_path = await fetch_and_save_model_files(model_id, save_path)
-    if not file_list_path:
-        print("❌ Failed to fetch file list. Aborting download.")
-        return None
-
-    with open(file_list_path, "r") as f:
-        files_to_download = json.load(f)
-
-    # Use asyncio.gather for concurrent downloads
-    download_tasks = [download_file_async(
-        model_id, file_name, save_path) for file_name in files_to_download]
-    results = await asyncio.gather(*download_tasks)
-
-    return save_path
-
-
-async def download_with_progress(model_id, sid, sio):
-    try:
-        print(f"🚀 Starting download for {model_id} using snapshot_download...")
-
-        # ✅ Get the download path
-        download_path = await get_download_path()
-        if not download_path:
-            raise ValueError("Download path is not set in the database")
-
-        model_path = os.path.join(download_path, model_id)
-        os.makedirs(model_path, exist_ok=True)  # Ensure directory exists
-
-        # ✅ Emit initialization event
-        await sio.emit("status", {"model_id": model_id, "status": "Downloading model"}, to=sid)
-        # size = await get_folder_size_async(model_path)
-        # ✅ Run `snapshot_download` in a separate thread (non-blocking)
-        # final_path = await asyncio.to_thread(snapshot_download, repo_id=model_id, local_dir=model_path, resume_download=True)
-
-        final_path = snapshot_download(
-            repo_id=model_id, local_dir=model_path, resume_download=True)
-
-        # ✅ Emit completion event
-        await sio.emit("completed", {"model_id": model_id, "model_path": final_path}, to=sid)
-
-        return model_path
-
-    except Exception as e:
-        await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
 async def stop_download(model_id, sid, sio):
@@ -247,59 +127,6 @@ async def stop_download(model_id, sid, sio):
         await sio.emit("error", {"model_id": model_id, "error": "No active download"}, to=sid)
 
 # 🔹 Background task to run snapshot_download in a separate thread
-
-
-async def download_model_in_background(sid, model_id, sio):
-    try:
-        await sio.emit("status", {"model_id": model_id, "status": "Initializing Download"}, to=sid)
-
-        # ✅ Get the download path
-        download_path = await get_download_path()
-        if not download_path:
-            raise ValueError("Download path is not set in the database")
-
-        model_path = os.path.join(download_path, model_id)
-        os.makedirs(model_path, exist_ok=True)  # Ensure directory exists
-        # ✅ Start the download in the background
-        final_path = await download_model_files(model_id, model_path)
-        if final_path:
-            print(f"🎉 Download completed! Files saved at: {final_path}")
-
-        # ✅ Calculate model size after download
-        total_size = await get_folder_size(final_path)
-        size_storage = convert_storage_unit(total_size)
-
-        # ✅ Save details to database
-        async with async_session_maker() as db:
-            result = await db.execute(select(Model).where(Model.model_name == model_id))
-            existing_model = result.scalars().first()
-
-            if existing_model:
-                existing_model.path = final_path
-                existing_model.size = size_storage.size
-                existing_model.unit = size_storage.unit
-            else:
-                new_model = Model(
-                    model_name=model_id,
-                    path=final_path,
-                    size=size_storage.size,
-                    unit=size_storage.unit
-                )
-                db.add(new_model)
-
-            await db.commit()
-
-        print("✅ Download complete:", final_path)
-        await sio.emit("status", {"model_id": model_id, "status": f"Download complete, saved at {final_path}"}, to=sid)
-        return final_path
-
-    except SQLAlchemyError as e:
-        await db.rollback()
-        print(f"❌ Database error: {e}")
-        return {"error": "Database error occurred"}
-
-    except Exception as e:
-        await sio.emit("error", {"model_id": model_id, "error": str(e)}, to=sid)
 
 
 def convert_storage_unit(size: float) -> ModelSizeResponse:
@@ -424,9 +251,9 @@ async def Get_Model_Downloaded():
             return {"error": str(e)}
 
 
-def delete_model_folder(model_id: str, base_path: str) -> bool:
+def delete_model_folder(path: str) -> bool:
     # Construct the full path
-    model_path = os.path.join(base_path, model_id)
+    model_path = os.path.join(path)
 
     try:
         # Check if the folder exists
@@ -468,15 +295,14 @@ async def Delete_Model(sid, model_id, sio):
                 await sio.emit("error", {"model_id": model_id, "message": "Path Not Found"}, to=sid)
                 return
 
-            path = setting['modelDownloadPath']  # Get the file path
-            model_name = model.model_name  # Get the file path
+            model_path = model.path  # Get the file path
 
             # Emit event: Initialization
             await sio.emit("progress", {"model_id": model_id, "status": "Initializing Deletion"}, to=sid)
 
             # Delete the file from disk
-            if os.path.exists(path):
-                result = delete_model_folder(model_name, path)
+            if os.path.exists(model_path):
+                result = delete_model_folder(model_path)
 
                 if result is True:
                     await sio.emit("progress", {"model_id": model_id, "status": "File Deleted"}, to=sid)
@@ -561,6 +387,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             result = await db.execute(select(Setting.path_store_cache_model_main))
             cache_path = result.scalar_one_or_none()
 
+            print("cache_path-->", cache_path)
+
             if not cache_path:
                 error_msg = "❌ No cache path found in settings."
                 print(error_msg)
@@ -583,7 +411,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
             if existing_model:
                 msg = f"✅ Model {model_id} already stored in DB at: {model_path}"
                 print(msg)
-                await sio.emit("status", {"sid": sid, "message": msg})
+                await sio.emit("path_exist", {"sid": sid, "message": msg})
                 return model_path
 
             # Check if model is already cached
@@ -628,6 +456,7 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 print(msg)
                 await sio.emit("status", {"sid": sid, "message": msg})
 
+            print("Check Model Path Location-->", model_path)
             # Ensure the model_path exists before listing files
             if not os.path.exists(model_path):
                 error_msg = f"❌ Model path does not exist: {model_path}"
@@ -635,11 +464,9 @@ async def download_model_to_cache(sid, model_id: str, sio):
                 await sio.emit("error", {"sid": sid, "message": error_msg})
                 return None
             # Get model size
-            total_size = sum(
-                os.path.getsize(os.path.join(model_path, f))
-                for f in os.listdir(model_path)
-                if os.path.isfile(os.path.join(model_path, f))
-            )
+            total_size = get_folder_size(model_path)
+
+            print("total size-->", total_size)
             size_storage = convert_storage_unit(total_size)
 
             # Store metadata in DB
@@ -655,6 +482,8 @@ async def download_model_to_cache(sid, model_id: str, sio):
             msg = f"✅ Model {model_id} stored in the database."
             print(msg)
             await sio.emit("status", {"sid": sid, "message": msg})
+            msg = f"✅ Download {model_id} Completed."
+            await sio.emit("download_completed", {"sid": sid, "message": msg, "model_id": model_id})
 
             return model_path
 
@@ -685,46 +514,84 @@ def get_snapshot_path(base_dir):
     return snapshot_folders[0]
 
 
-async def get_or_load_model(model_id: str):
-    """Retrieve model from memory, or load it if not already loaded."""
+async def get_or_load_model(model_id: int):
+    """Retrieve model from memory or load it with a maximum cache size."""
     try:
-        print("loaded_models", loaded_models)
+        print("🔍 Checking loaded models:", loaded_models.keys())
+        # ✅ Check if model is already loaded
         if model_id in loaded_models:
-            print(f"✅ Model {model_id} already loaded.")
+            print(f"✅ Model {model_id} already loaded. Moving to most recent.")
+            # loaded_models.move_to_end(model_id)  # Move accessed model to the end (most recently used)
             return loaded_models[model_id]
 
-        # Offload the model loading process to a separate thread
-        loop = asyncio.get_event_loop()
-        with ThreadPoolExecutor() as pool:
-            text_generator = await loop.run_in_executor(
-                pool,
-                partial(_load_model_off_thread, model_id)
-            )
+        loop = asyncio.get_running_loop()
 
-        if text_generator:
-            loaded_models[model_id] = text_generator  # Cache the model
-            return text_generator
-        else:
+        # ✅ Fetch model path asynchronously before switching to threads
+        model_path = await load_model_from_db(model_id)
+        if not model_path:
+            print(f"❌ Model {model_id} not found in DB.")
             return None
 
+        # ✅ Load the model off-thread
+        future = loop.run_in_executor(executor, partial(
+            _load_model_sync, model_id, model_path))
+        # ✅ Set timeout
+        text_generator = await asyncio.wait_for(future, timeout=100)
+
+        if text_generator:
+            # ✅ Ensure memory limit is respected (evict oldest model if needed)
+            if len(loaded_models) >= MAX_MODELS:
+                oldest_model_id, _ = loaded_models.popitem(
+                    last=False)  # Remove the oldest (LRU)
+                print(
+                    f"🗑️ Removing oldest model {oldest_model_id} to free memory...")
+                # ✅ Properly unload model from memory
+                unload_model(oldest_model_id)
+
+            # ✅ Cache new model
+            loaded_models[model_id] = text_generator
+            print(f"🚀 Model {model_id} loaded successfully.")
+            return text_generator
+        else:
+            print(f"⚠️ Model {model_id} failed to load.")
+            return None
+
+    except asyncio.TimeoutError:
+        print(f"❌ Loading model {model_id} timed out!")
+        return None
     except Exception as e:
         print(f"❌ Error in get_or_load_model: {str(e)}")
         return None
-def _load_model_off_thread(model_id: str):
-    """Helper function to load the model in a separate thread."""
-    try:
-        # Fetch model path from the database (blocking operation)
-        model_path = asyncio.run(load_model_from_db(model_id))
-        if not model_path:
-            return None
+    finally:
+        # ✅ Clean up memory to prevent leaks
+        gc.collect()
+        device_os.clear_pytorch_cache()
 
-        # Load the model (blocking operation)
-        return _load_model_sync(model_id, model_path)
-    except Exception as e:
-        print(f"❌ Error in _load_model_off_thread: {str(e)}")
-        return None
 
-def _load_model_sync(model_id: str, model_path: str):
+def unload_model(model_id: int):
+    """Unload a specific model from memory to free RAM."""
+    if model_id in loaded_models:
+        print(f"🗑️ Unloading model {model_id}...")
+        del loaded_models[model_id]
+        torch.cuda.empty_cache()
+        gc.collect()
+
+
+# def _load_model_off_thread(model_id: int):
+#     """Helper function to load the model in a separate thread."""
+#     try:
+#         # Fetch model path from the database (blocking operation)
+#         model_path = asyncio.run(load_model_from_db(model_id))
+#         if not model_path:
+#             return None
+
+#         # Load the model (blocking operation)
+#         return _load_model_sync(model_id, model_path)
+#     except Exception as e:
+#         print(f"❌ Error in _load_model_off_thread: {str(e)}")
+#         return None
+
+def _load_model_sync(model_id: int, model_path: str):
     """Synchronous function to load the model."""
     try:
         device = str(device_os.check_pytorch_device())
@@ -733,11 +600,12 @@ def _load_model_sync(model_id: str, model_path: str):
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=torch.float16 if device in ["mps", "cuda"] else "auto",
-            trust_remote_code=False
+            trust_remote_code=True
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
-        
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=False)
+
         model.to(device)
 
         text_generator = pipeline(
@@ -753,7 +621,8 @@ def _load_model_sync(model_id: str, model_path: str):
         print(f"❌ Error loading model {model_id}: {str(e)}")
         return None
 
-async def load_model_from_db(model_id: str):
+
+async def load_model_from_db(model_id: int):
     """Fetch model path from the database."""
     try:
         async with async_session_maker() as db:
@@ -774,7 +643,7 @@ async def load_model_from_db(model_id: str):
         return None
 
 
-async def load_model(model_id: str, model_path: str):
+async def load_model(model_id: int, model_path: str):
     """Loads the model into memory and stores it in a dictionary."""
     try:
         if model_id in loaded_models:
@@ -790,8 +659,9 @@ async def load_model(model_id: str, model_path: str):
             trust_remote_code=False
         )
 
-        tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=False)
-        
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=False)
+
         model.to(device)
 
         text_generator = pipeline(
@@ -813,16 +683,23 @@ async def prompt(model_id: int, prompt: str):
     return await _async_prompt(model_id, prompt)
 
 
-async def _async_prompt(model_id: str, prompt: str):
+async def _async_prompt(model_id: int, prompt: str):
     try:
         print("loaded_models", loaded_models)
 
-        # ✅ Check if model is in memory
-        if model_id in loaded_models:
+        # ✅ Remove least used model if cache exceeds limit
+        if str(model_id) not in loaded_models and len(loaded_models) >= MAX_CACHE_SIZE:
+            removed_model_id, removed_model = loaded_models.popitem(last=False)
+            del removed_model  # ✅ Explicitly delete the model
+            gc.collect()  # ✅ Force garbage collection
+            print(
+                f"🗑️ Removed cached model {removed_model_id} to free memory.")
+
+        # ✅ Check if model is already loaded
+        if str(model_id) in loaded_models:
             print(f"✅ Using cached model {model_id}.")
-            text_generator = loaded_models[model_id]  # Directly use the pipeline
+            text_generator = loaded_models[str(model_id)]
         else:
-            # ✅ Load model from database
             async with async_session_maker() as db:
                 print("🔍 Fetching model_id -->", model_id)
                 result = await db.execute(select(Model).where(Model.model_id == model_id))
@@ -835,48 +712,101 @@ async def _async_prompt(model_id: str, prompt: str):
                 model_path = get_snapshot_path(model_entry.path)
                 print(f"📂 Loading model from: {model_path}")
 
-                # ✅ Use cached model loading function
-                text_generator = await load_model(model_id, model_path)
+                text_generator = await get_or_load_model(model_id)
                 if not text_generator:
                     return "Failed to load model"
+
+                # ✅ Store model in cache
+                loaded_models[model_id] = text_generator
 
         print("🚀 Start Generate Text")
 
         # ✅ Ensure we are getting the correct event loop
         loop = asyncio.get_running_loop()
 
-        # ✅ Run _generate_text in ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            generated_text = await loop.run_in_executor(
-                pool,
-                partial(_generate_text, text_generator, prompt)
-            )
+        # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
+       # ✅ Run _generate_text in ThreadPoolExecutor (with cleanup)
+
+        with ProcessPoolExecutor(max_workers=2) as pool:
+            future = loop.run_in_executor(pool, partial(
+                _generate_text, text_generator, prompt))
+
+            try:
+                # Set timeout
+                generated_text = await asyncio.wait_for(future, timeout=MAX_TIMEOUT)
+            except asyncio.TimeoutError:
+                future.cancel()
+                pool.shutdown(wait=False)
+
+                print("❌ _generate_text timed out!")
+                return "Timeout error"
+            except Exception as e:
+                future.cancel()
+                pool.shutdown(wait=False)
+
+                print("❌Exception Process Pool!", str(e))
+                return "Timeout error"
+            finally:
+                # ✅ Shutdown ThreadPoolExecutor and clean up
+                pool.shutdown(wait=False)
+                print("🛑 ProcessPoolExecutor shut down.")
+                # ✅ Force garbage collection to free memory
+                gc.collect()
+                device_os.clear_pytorch_cache()
+
+        if generated_text is None:
+            print("❌ No output from _generate_text")
 
         print("✅ Generated Text:", generated_text)
 
-        # ✅ Return generated text to FastAPI response
+        # # ✅ Force garbage collection to prevent memory leaks
+        # gc.collect()
+
+        # ✅ Check & Kill Zombie Processes
+        # async_processor._cleanup_processes()
+
         return generated_text
 
     except Exception as e:
         print(f"❌ Error in _async_prompt for model {model_id}: {str(e)}")
         return f"Error generating response: {str(e)}"
-        
+
+
 def _generate_text(text_generator, prompt):
     try:
-        print("🚀 _generate_text called with prompt:", prompt)  # ✅ Debugging log
+        print("🚀 _generate_text called with prompt:", prompt)
+
+        # ✅ Add a manual timeout mechanism
+        start_time = time.time()
+        max_time = MAX_TIMEOUT  # seconds
+
         generated_text = text_generator(
             prompt,
-            max_length=100,
-            do_sample=True,
-            top_k=50,
-            top_p=0.95,
-            truncation=True,
-            repetition_penalty=1.2,
+            max_length=100,  # Ensure enough tokens for full response
+            do_sample=False,  # Prevent randomness
+            temperature=0.2,  # Keep some flexibility but limit randomness
+            top_k=10,  # Allow a small range of high-probability tokens
+            top_p=0.9,  # Use nucleus sampling
+            repetition_penalty=1.05,  # Avoid repeated patterns
         )
-        print("✅ _generate_text output:", generated_text)  # ✅ Debugging log
 
-        # ✅ Ensure proper format
-        return generated_text[0]["generated_text"].strip() if generated_text else None
+
+        if time.time() - start_time > max_time:
+            raise TimeoutError("Generation exceeded time limit")
+
+        print("✅ _generate_text output:", generated_text)
+
+        if generated_text and "generated_text" in generated_text[0]:
+            response = generated_text[0]["generated_text"].strip()
+
+            # ✅ Remove prompt if it appears at the start
+            if response.lower().startswith(prompt.lower()):
+                response = response[len(prompt):].strip()
+
+            return response
+
+        return None
+
     except Exception as e:
         print(f"❌ Error in _generate_text: {e}")
         return None
