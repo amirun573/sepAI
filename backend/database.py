@@ -1,6 +1,7 @@
 import os
 import asyncio
 import subprocess
+import sys
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from alembic.config import Config
@@ -35,13 +36,27 @@ async def initialize_database():
 
     # Run migrations
     await run_migrations()
+def get_alembic_config():
+    """Get the correct path for alembic.ini and migration scripts."""
+    base_dir = getattr(sys, '_MEIPASS', os.path.abspath(os.path.dirname(__file__)))
+    
+    # Adjust path for PyInstaller
+    alembic_ini_path = os.path.join(base_dir, "alembic.ini")
+    alembic_migration_path = os.path.join(base_dir, "alembic")
 
+    if not os.path.exists(alembic_ini_path):
+        raise FileNotFoundError(f"ERROR: Alembic config not found at {alembic_ini_path}")
+
+    alembic_cfg = Config(alembic_ini_path)
+    alembic_cfg.set_main_option("script_location", alembic_migration_path)  # 👈 Fix migration path
+
+    return alembic_cfg
 
 async def run_migrations():
     """Run Alembic migrations asynchronously using the Alembic API."""
     print("⚡ Running Alembic migrations...")
 
-    alembic_cfg = Config("alembic.ini")
+    alembic_cfg = get_alembic_config()
     loop = asyncio.get_running_loop()
 
     await loop.run_in_executor(None, lambda: command.upgrade(alembic_cfg, "head"))
