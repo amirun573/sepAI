@@ -13,7 +13,7 @@ let exePath = path.join(__dirname, './main' + (os.platform() === 'win32' ? '.exe
 
 
 //during development, use this
-// let exePath = path.join(__dirname, '../../backend/dist/main/main' + (os.platform() === 'win32' ? '.exe' : ''));
+// let exePath = path.join(__dirname, '../../backend/dist/main' + (os.platform() === 'win32' ? '.exe' : ''));
 if (isProd) {
   serve({ directory: 'app' });
 } else {
